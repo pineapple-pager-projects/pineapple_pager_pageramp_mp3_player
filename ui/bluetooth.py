@@ -143,11 +143,31 @@ class BluetoothScreen:
         self.state = self.ERROR
         self.error_msg = "No USB BT dongle found.\nPlug in a dongle and try again."
 
+    def _ensure_dbus_config(self):
+        """Install BlueALSA D-Bus policy if missing and restart dbus."""
+        dbus_conf = "/etc/dbus-1/system.d/bluealsa.conf"
+        if os.path.isfile(dbus_conf):
+            return
+        src = os.path.join(SCRIPT_DIR, "config", "bluealsa-dbus.conf")
+        if not os.path.isfile(src):
+            return
+        self._run("cp %s %s" % (src, dbus_conf), timeout=3)
+        # Restart dbus so it picks up the new policy
+        if os.path.isfile("/etc/init.d/dbus"):
+            self._run("/etc/init.d/dbus restart", timeout=5)
+        else:
+            self._run("killall dbus-daemon; sleep 1; dbus-daemon --system",
+                       timeout=5)
+        time.sleep(2)
+
     def _ensure_bluealsad(self):
         """Ensure bluealsad is running on the correct adapter."""
         bluealsad = os.path.join(SCRIPT_DIR, "bin", "bluealsad")
         if not os.path.isfile(bluealsad):
             return
+
+        # Ensure D-Bus config is installed
+        self._ensure_dbus_config()
 
         # Check if already running on the right adapter
         ps = self._run("ps w | grep bluealsad | grep -v grep")

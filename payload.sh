@@ -249,8 +249,12 @@ if [ -n "$HCI" ]; then
         DBUS_INSTALLED=1
         if [ -x /etc/init.d/dbus ]; then
             /etc/init.d/dbus restart 2>/dev/null
-            sleep 2
+        else
+            killall dbus-daemon 2>/dev/null
+            sleep 1
+            dbus-daemon --system 2>/dev/null
         fi
+        sleep 2
     fi
 
     # Start bluetoothd
