@@ -135,6 +135,9 @@ class BluetoothScreen:
                     self._run("bluetoothctl select %s" % self.adapter_mac)
                 self._run("bluetoothctl power on")
                 self._run("bluetoothctl pairable on")
+                # Ensure D-Bus config and bluealsad are ready
+                self._ensure_dbus_config()
+                self._ensure_bluealsad()
                 self.message = "Found: %s (%s)" % (hci, self.adapter_mac or "?")
                 self.state = self.SCAN
                 self._start_scan()
@@ -196,10 +199,10 @@ class BluetoothScreen:
     def _start_scan(self):
         """Begin scanning for Bluetooth devices.
 
-        Uses hcitool scan for reliable BR/EDR classic device discovery.
-        CSR8510 dongles have MGMT issues where bluetoothctl scan misses
-        BR/EDR devices, but hcitool's legacy HCI inquiry works fine.
-        Output is captured to a temp file and read when the scan finishes.
+        Runs both bluetoothctl scan (LE + BR/EDR) and hcitool scan (BR/EDR
+        backup) in parallel.  Some devices (e.g. Bose speakers) only
+        advertise via BLE, while hcitool catches classic-only devices that
+        bluetoothctl may miss on CSR8510 dongles.
         """
         self.message = "Scanning... Put device in pairing mode!"
         self.devices = []
@@ -211,7 +214,14 @@ class BluetoothScreen:
             self._run("bluetoothd -n &", timeout=3)
             time.sleep(2)
 
-        # hcitool scan captures output to file for _poll_scan to read
+        # bluetoothctl scan on — discovers both LE and BR/EDR
+        subprocess.Popen(
+            "timeout %d bluetoothctl scan on >/dev/null 2>&1"
+            % self._scan_duration,
+            shell=True,
+        )
+
+        # hcitool scan — BR/EDR backup, captures to file
         subprocess.Popen(
             "hcitool -i %s scan --length=8 >%s 2>/dev/null" % (
                 self.hci, self._scan_file),
@@ -241,7 +251,20 @@ class BluetoothScreen:
                         self.devices.append((mac, name + " [paired]"))
                         seen.add(mac)
 
-        # 2. Read hcitool scan results from temp file
+        # 2. bluetoothctl devices — includes BLE-discovered devices
+        all_devs = self._run("bluetoothctl devices 2>/dev/null")
+        for line in all_devs.split("\n"):
+            if line.startswith("Device "):
+                parts = line.split(None, 2)
+                if len(parts) >= 3:
+                    mac = parts[1]
+                    name = parts[2]
+                    # Skip unnamed/random-MAC entries
+                    if mac not in seen and name and ":" not in name:
+                        self.devices.append((mac, name))
+                        seen.add(mac)
+
+        # 3. Read hcitool scan results from temp file (BR/EDR backup)
         scan_file = getattr(self, "_scan_file", "/tmp/pageramp_bt_scan.txt")
         hci_output = ""
         try:
