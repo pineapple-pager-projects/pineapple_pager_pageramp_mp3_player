@@ -16,7 +16,7 @@ A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://
 
 ## Requirements
 
-- WiFi Pineapple Pager with [PAGERCTL](https://github.com/hak5/wifipineapplepager-payloads) library installed
+- WiFi Pineapple Pager (PAGERCTL library is bundled in `payload/lib/`)
 - External USB Bluetooth adapter (CSR8510 or RTL8761B recommended — the built-in MT7961 has a broken ACL data path)
 - Internet connection for first-run dependency installation (python3, mpg123)
 
