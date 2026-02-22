@@ -199,10 +199,9 @@ class BluetoothScreen:
     def _start_scan(self):
         """Begin scanning for Bluetooth devices.
 
-        Runs both bluetoothctl scan (LE + BR/EDR) and hcitool scan (BR/EDR
-        backup) in parallel.  Some devices (e.g. Bose speakers) only
-        advertise via BLE, while hcitool catches classic-only devices that
-        bluetoothctl may miss on CSR8510 dongles.
+        Uses hcitool lescan which discovers both BLE and dual-mode
+        (BR/EDR + LE) devices.  Output is captured to a temp file and
+        parsed when the scan timer expires.
         """
         self.message = "Scanning... Put device in pairing mode!"
         self.devices = []
@@ -214,18 +213,11 @@ class BluetoothScreen:
             self._run("bluetoothd -n &", timeout=3)
             time.sleep(2)
 
-        # bluetoothctl scan on — discovers both LE and BR/EDR
+        # hcitool lescan — discovers BLE + dual-mode devices
         subprocess.Popen(
-            "timeout %d bluetoothctl scan on >/dev/null 2>&1"
-            % self._scan_duration,
+            "timeout %d hcitool -i %s lescan >%s 2>/dev/null" % (
+                self._scan_duration, self.hci, self._scan_file),
             shell=True,
-        )
-
-        # hcitool scan — BR/EDR backup, captures to file
-        subprocess.Popen(
-            "hcitool -i %s scan --length=8 >%s 2>/dev/null" % (
-                self.hci, self._scan_file),
-            shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
 
     def _poll_scan(self):
@@ -251,36 +243,29 @@ class BluetoothScreen:
                         self.devices.append((mac, name + " [paired]"))
                         seen.add(mac)
 
-        # 2. bluetoothctl devices — includes BLE-discovered devices
-        all_devs = self._run("bluetoothctl devices 2>/dev/null")
-        for line in all_devs.split("\n"):
-            if line.startswith("Device "):
-                parts = line.split(None, 2)
-                if len(parts) >= 3:
-                    mac = parts[1]
-                    name = parts[2]
-                    # Skip unnamed/random-MAC entries
-                    if mac not in seen and name and ":" not in name:
-                        self.devices.append((mac, name))
-                        seen.add(mac)
-
-        # 3. Read hcitool scan results from temp file (BR/EDR backup)
+        # 2. Scanned devices from hcitool lescan output
         scan_file = getattr(self, "_scan_file", "/tmp/pageramp_bt_scan.txt")
-        hci_output = ""
+        scan_output = ""
         try:
             with open(scan_file, "r") as f:
-                hci_output = f.read()
+                scan_output = f.read()
         except (IOError, OSError):
             pass
 
-        for line in hci_output.split("\n"):
+        for line in scan_output.split("\n"):
             line = line.strip()
-            if not line or "Scanning" in line:
+            if not line or "LE Scan" in line or "Scanning" in line:
                 continue
             parts = line.split(None, 1)
-            if len(parts) >= 1 and ":" in parts[0]:
+            if len(parts) >= 2 and ":" in parts[0]:
                 mac = parts[0]
-                name = parts[1] if len(parts) > 1 else "Unknown"
+                name = parts[1]
+                # Skip unnamed entries
+                if name == "(unknown)":
+                    continue
+                # Strip LE- prefix from name
+                if name.startswith("LE-"):
+                    name = name[3:]
                 if mac not in seen:
                     self.devices.append((mac, name))
                     seen.add(mac)

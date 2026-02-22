@@ -11,6 +11,7 @@ import sys
 import json
 import time
 import signal
+import subprocess
 
 # Add lib directory to path for pagerctl
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -103,6 +104,10 @@ class PagerAmp:
         # Auto-dim state
         self._last_activity = time.time()
         self._dimmed = False
+
+        # BT watchdog state
+        self._last_bt_check = 0
+        self._bt_connected = False
 
     def init_display(self):
         """Initialize the Pager display."""
@@ -205,6 +210,39 @@ class PagerAmp:
                 self.screens["bluetooth"].return_screen = self.current_screen
             self._switch_screen(result)
 
+    def _check_bt(self):
+        """Watchdog: check BT connection every 5s, auto-reconnect if dropped."""
+        now = time.time()
+        if now - self._last_bt_check < 5:
+            return
+        self._last_bt_check = now
+
+        mac = self.settings.get("bt_device_mac")
+        if not mac:
+            return
+
+        try:
+            result = subprocess.run(
+                ["bluetoothctl", "info", mac],
+                capture_output=True, text=True, timeout=3)
+            connected = "Connected: yes" in result.stdout
+        except Exception:
+            return
+
+        if self._bt_connected and not connected:
+            # Connection dropped — try to reconnect
+            try:
+                subprocess.run(
+                    ["bluetoothctl", "connect", mac],
+                    capture_output=True, text=True, timeout=15)
+            except Exception:
+                pass
+            # Restart mpg123 so it gets a fresh ALSA handle
+            self.client.restart()
+            self.client.set_volume(self.settings.get("volume", 80))
+
+        self._bt_connected = connected
+
     def update(self):
         """Update state — poll mpg123 status, auto-advance, auto-dim."""
         # Auto-dim after inactivity
@@ -212,6 +250,9 @@ class PagerAmp:
                 time.time() - self._last_activity > DIM_TIMEOUT):
             self.pager.set_brightness(DIM_BRIGHTNESS)
             self._dimmed = True
+
+        # BT connection watchdog
+        self._check_bt()
 
         status = self.client.poll_status()
 
