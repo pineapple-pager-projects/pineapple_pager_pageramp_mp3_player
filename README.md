@@ -55,6 +55,10 @@ scp -r . root@172.16.52.1:/root/payloads/user/utilities/pageramp/
 
 With PagerAmp running, navigate to `http://172.16.52.1:1337` from any device on the Pager's network to upload MP3 files. Uploaded files appear in the file browser immediately.
 
+## Known Issues
+
+- **Bluetooth disconnect between tracks with mixed sample rates:** If your music library contains MP3 files with different sample rates (e.g., 44100 Hz and 48000 Hz), the speaker may briefly announce "disconnected" when switching between them. This is because the ALSA audio device must be reopened with new parameters when the sample rate changes. To avoid this, ensure all MP3 files use the same sample rate (44100 Hz recommended). You can re-encode with: `ffmpeg -i input.mp3 -ar 44100 -b:a 192k output.mp3`
+
 ## Bluetooth Setup
 
 The built-in MediaTek MT7961 Bluetooth on the Pineapple Pager has a firmware bug that prevents audio streaming (ACL data path is broken). You need an external USB Bluetooth adapter:
@@ -94,7 +98,9 @@ pageramp/                    # Clone/copy to /root/payloads/user/utilities/pager
 │   ├── upload_server.py     # HTTP upload server (port 1337)
 │   └── templates/           # HTML templates
 ├── bin/
-│   └── bluealsad            # BlueALSA daemon (MIPS binary)
+│   ├── bluealsad            # BlueALSA daemon (MIPS binary)
+│   ├── mpg123               # MP3 decoder/player (MIPS binary)
+│   └── aplay                # ALSA audio player (MIPS binary)
 ├── bt/lib/                  # BlueALSA + ALSA shared libraries
 ├── lib/                     # pagerctl library (libpagerctl.so + pagerctl.py)
 ├── config/                  # ALSA and D-Bus configuration
