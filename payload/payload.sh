@@ -298,6 +298,11 @@ fi
 # ===================================================
 mkdir -p /mmc/music
 
+# Copy bundled demo track if music directory is empty
+if [ -z "$(ls /mmc/music/*.mp3 2>/dev/null)" ]; then
+    cp "$PAYLOAD_DIR/music/"*.mp3 /mmc/music/ 2>/dev/null
+fi
+
 # ===================================================
 # 9. Start web upload server
 # ===================================================
