@@ -1,0 +1,12 @@
+# User data
+data/settings.json
+music/*.mp3
+music/*.wav
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Old daemon (replaced by mpg123)
+bin/pagerampd
+bin/aplay

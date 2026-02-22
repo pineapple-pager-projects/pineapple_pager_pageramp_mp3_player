@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PagerAmp Upload</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a0f;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 20px;
+}
+.container { max-width: 600px; margin: 0 auto; }
+h1 {
+    color: #00ff00;
+    font-size: 24px;
+    margin-bottom: 4px;
+    font-family: monospace;
+}
+.subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+.drop-zone {
+    border: 2px dashed #333;
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 20px;
+    background: #111;
+}
+.drop-zone:hover, .drop-zone.dragover {
+    border-color: #00ff00;
+    background: #0a1a0a;
+}
+.drop-zone p { color: #888; margin-bottom: 10px; }
+.drop-zone .formats { color: #555; font-size: 12px; }
+.btn {
+    display: inline-block;
+    padding: 8px 20px;
+    background: #00cc00;
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+.btn:hover { background: #00ff00; }
+input[type="file"] { display: none; }
+.upload-status {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    display: none;
+}
+.upload-status.success { display: block; background: #0a1a0a; color: #00ff00; border: 1px solid #003300; }
+.upload-status.error { display: block; background: #1a0a0a; color: #ff4444; border: 1px solid #330000; }
+.upload-status.uploading { display: block; background: #1a1a0a; color: #ffbb00; border: 1px solid #332200; }
+h2 {
+    color: #888;
+    font-size: 16px;
+    margin: 20px 0 10px;
+    border-bottom: 1px solid #222;
+    padding-bottom: 6px;
+}
+.file-list { list-style: none; }
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #1a1a1a;
+    font-size: 14px;
+}
+.file-item:hover { background: #111; }
+.file-name { color: #ccc; flex: 1; }
+.file-size { color: #666; margin: 0 12px; font-size: 12px; }
+.file-delete {
+    color: #ff4444;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid #331111;
+    border-radius: 3px;
+    background: none;
+}
+.file-delete:hover { background: #1a0a0a; border-color: #ff4444; }
+.empty { color: #444; font-style: italic; padding: 20px; text-align: center; }
+.progress {
+    width: 100%;
+    height: 4px;
+    background: #222;
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+    display: none;
+}
+.progress-bar {
+    height: 100%;
+    background: #00cc00;
+    width: 0%;
+    transition: width 0.3s;
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>PagerAmp</h1>
+    <p class="subtitle">Upload music to your Pager</p>
+
+    <div class="drop-zone" id="dropZone">
+        <p>Drag & drop files here</p>
+        <p>or</p>
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+        <input type="file" id="fileInput" multiple accept=".mp3,.wav,.m3u">
+        <p class="formats">Supported: .mp3, .wav, .m3u</p>
+    </div>
+
+    <div class="progress" id="progress">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <div class="upload-status" id="status"></div>
+
+    <h2>Library</h2>
+    <ul class="file-list" id="fileList">
+        <li class="empty">Loading...</li>
+    </ul>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const statusEl = document.getElementById('status');
+const fileList = document.getElementById('fileList');
+const progress = document.getElementById('progress');
+const progressBar = document.getElementById('progressBar');
+
+// Drag and drop
+dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) uploadFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length > 0) uploadFiles(fileInput.files);
+});
+
+function uploadFiles(files) {
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('file', files[i]);
+    }
+
+    statusEl.className = 'upload-status uploading';
+    statusEl.textContent = 'Uploading ' + files.length + ' file(s)...';
+    progress.style.display = 'block';
+    progressBar.style.width = '0%';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/upload');
+
+    xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+            const pct = Math.round(e.loaded / e.total * 100);
+            progressBar.style.width = pct + '%';
+        }
+    };
+
+    xhr.onload = () => {
+        progress.style.display = 'none';
+        try {
+            const result = JSON.parse(xhr.responseText);
+            if (result.uploaded && result.uploaded.length > 0) {
+                statusEl.className = 'upload-status success';
+                statusEl.textContent = 'Uploaded: ' + result.uploaded.join(', ');
+            }
+            if (result.errors && result.errors.length > 0) {
+                statusEl.className = 'upload-status error';
+                statusEl.textContent = 'Errors: ' + result.errors.join(', ');
+            }
+        } catch(e) {
+            statusEl.className = 'upload-status error';
+            statusEl.textContent = 'Upload failed';
+        }
+        loadLibrary();
+        fileInput.value = '';
+    };
+
+    xhr.onerror = () => {
+        progress.style.display = 'none';
+        statusEl.className = 'upload-status error';
+        statusEl.textContent = 'Upload failed — connection error';
+    };
+
+    xhr.send(formData);
+}
+
+function loadLibrary() {
+    fetch('/api/library')
+        .then(r => r.json())
+        .then(data => {
+            fileList.innerHTML = '';
+            if (!data.files || data.files.length === 0) {
+                fileList.innerHTML = '<li class="empty">No music files yet</li>';
+                return;
+            }
+            data.files.forEach(f => {
+                const li = document.createElement('li');
+                li.className = 'file-item';
+                li.innerHTML = `
+                    <span class="file-name">${escHtml(f.name)}</span>
+                    <span class="file-size">${f.size_str}</span>
+                    <button class="file-delete" onclick="deleteFile('${escHtml(f.name)}')">delete</button>
+                `;
+                fileList.appendChild(li);
+            });
+        })
+        .catch(() => {
+            fileList.innerHTML = '<li class="empty">Failed to load library</li>';
+        });
+}
+
+function deleteFile(name) {
+    if (!confirm('Delete ' + name + '?')) return;
+    fetch('/api/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({filename: name})
+    })
+    .then(r => r.json())
+    .then(() => loadLibrary())
+    .catch(() => alert('Delete failed'));
+}
+
+function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Load library on page load
+loadLibrary();
+</script>
+</body>
+</html>
