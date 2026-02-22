@@ -92,8 +92,8 @@ class Playlist:
                 self.order[self.position], self.order[idx]
 
     def cycle_repeat(self):
-        """Toggle repeat: off → one → off."""
-        self.repeat = self.REPEAT_OFF if self.repeat else self.REPEAT_ONE
+        """Cycle through repeat modes: off → all → one → off."""
+        self.repeat = (self.repeat + 1) % 3
         return self.repeat
 
     def current_track_index(self):
@@ -197,4 +197,4 @@ class Playlist:
 
     @property
     def repeat_label(self):
-        return "On" if self.repeat else "Off"
+        return ("Off", "All", "One")[self.repeat]

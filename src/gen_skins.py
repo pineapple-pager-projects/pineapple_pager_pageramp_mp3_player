@@ -2,7 +2,7 @@
 """Generate PagerAmp skin background PNGs (480x222 RGB565-friendly)."""
 
 import os
-from PIL import Image, ImageDraw, ImageEnhance
+from PIL import Image, ImageDraw
 
 W, H = 480, 222
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(
@@ -95,34 +95,6 @@ def gen_classic():
         print("  Saved vol/bal knob %s (%dx%d)" % (vol_path,
               s2.width, s2.height))
 
-    # Active (dark blue tint) seek slider knob
-    if os.path.exists(slider_path):
-        slider = Image.open(slider_path).convert("RGBA")
-        _clean_alpha(slider)
-        slider = _tint_active(slider)
-        sx, sy = 240, 133
-        patch = img.crop((sx, sy, sx + slider.width, sy + slider.height))
-        patch = patch.convert("RGBA")
-        patch.paste(slider, (0, 0), slider)
-        apath = os.path.join(OUT_DIR, "slider-knob-active.png")
-        patch.convert("RGB").save(apath)
-        print("  Saved active seek knob %s (%dx%d)" % (apath,
-              slider.width, slider.height))
-
-    # Active (dark blue tint) vol/bal slider knob
-    if os.path.exists(slider2_path):
-        s2 = Image.open(slider2_path).convert("RGBA")
-        _clean_alpha(s2)
-        s2 = _tint_active(s2)
-        vx, vy = 230, 117
-        patch = img.crop((vx, vy, vx + s2.width, vy + s2.height))
-        patch = patch.convert("RGBA")
-        patch.paste(s2, (0, 0), s2)
-        apath = os.path.join(OUT_DIR, "vol-knob-active.png")
-        patch.convert("RGB").save(apath)
-        print("  Saved active vol/bal knob %s (%dx%d)" % (apath,
-              s2.width, s2.height))
-
     # Active button sprites (pre-composited on bg patch for no-alpha pagerctl)
     active_sprites = [
         ("previous-active.png", 17, 176),
@@ -153,25 +125,6 @@ def _clean_alpha(img):
     alpha = img.split()[3]
     alpha = alpha.point(lambda p: 255 if p > 128 else 0)
     img.putalpha(alpha)
-
-
-def _tint_active(img, color=(55, 78, 95), blend=0.6):
-    """Apply dark blueish tint to match active button style."""
-    alpha = img.split()[3]
-    pixels = img.load()
-    w, h = img.size
-    r2, g2, b2 = color
-    inv = 1.0 - blend
-    for y in range(h):
-        for x in range(w):
-            r, g, b, a = pixels[x, y]
-            pixels[x, y] = (
-                int(r * inv + r2 * blend),
-                int(g * inv + g2 * blend),
-                int(b * inv + b2 * blend),
-                a,
-            )
-    return img
 
 
 def _save_sprite_patches(bg_img, sprite_list, scale, label):
