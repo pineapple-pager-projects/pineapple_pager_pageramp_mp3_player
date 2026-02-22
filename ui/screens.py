@@ -182,7 +182,7 @@ class NowPlayingScreen:
 
         # Classic groove positions for dynamic knobs
         # (x_start, x_end, y) — knob drawn within this range
-        self._vol_groove = (190, 274, 112)   # orange groove (up 5)
+        self._vol_groove = (190, 294, 112)   # orange groove (up 5)
         self._bal_groove = (311, 370, 112)   # green groove (up 5)
 
         # Active button sprite handles (indexed by _btn_index 0-7)
@@ -747,6 +747,10 @@ class FileBrowserScreen:
         self.font_size = 12
         self.line_height = 18
         self.visible_count = (SCREEN_H - 28) // self.line_height
+        self._scan_dir()
+
+    def enter(self):
+        """Rescan current directory (picks up new uploads)."""
         self._scan_dir()
 
     def _scan_dir(self):
