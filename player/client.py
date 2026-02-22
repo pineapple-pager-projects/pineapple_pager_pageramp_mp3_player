@@ -40,7 +40,8 @@ class Mpg123Client:
         env.setdefault("ALSA_CONFIG_PATH",
                        os.path.join(self._script_dir, "config", "asound.conf"))
         # mpg123 output module directory (output_alsa.so)
-        env.setdefault("MPG123_MODDIR", "/mmc/usr/lib/mpg123")
+        env.setdefault("MPG123_MODDIR",
+                       os.path.join(self._script_dir, "lib", "mpg123"))
         # Ensure our libs are on LD_LIBRARY_PATH
         ld = env.get("LD_LIBRARY_PATH", "")
         our_ld = "%s:%s/lib" % (bt_lib, self._script_dir)

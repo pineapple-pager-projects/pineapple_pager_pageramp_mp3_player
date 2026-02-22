@@ -142,7 +142,7 @@ class PagerAmp:
         our_ld = "%s:%s/lib" % (bt_lib, SCRIPT_DIR)
         if our_ld not in ld:
             env["LD_LIBRARY_PATH"] = our_ld + (":" + ld if ld else "")
-        aplay = "/mmc/root/bt-audio/bin/aplay"
+        aplay = os.path.join(SCRIPT_DIR, "bin", "aplay")
         if not os.path.exists(aplay):
             return
         try:
