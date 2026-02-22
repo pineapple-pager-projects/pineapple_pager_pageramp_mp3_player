@@ -4,6 +4,7 @@ payload/music/*.mp3
 payload/music/*.wav
 # Keep the default demo track
 !payload/music/Hak5-Pager.mp3
+!payload/music/brAinphreAk - Pineapple Pager.mp3
 
 # Python cache
 __pycache__/
