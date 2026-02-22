@@ -2,7 +2,7 @@
 
 A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://shop.hak5.org/products/wifi-pineapple-pager) by Hak5.
 
-![PagerAmp UI](https://raw.githubusercontent.com/brainphreak/pineapple_pager_pageramp_mp3_player/main/payload/skins/classic_bg.png)
+![PagerAmp UI](https://raw.githubusercontent.com/brainphreak/pineapple_pager_pageramp_mp3_player/main/skins/classic_bg.png)
 
 ## Features
 
@@ -16,16 +16,16 @@ A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://
 
 ## Requirements
 
-- WiFi Pineapple Pager (PAGERCTL library is bundled in `payload/lib/`)
+- WiFi Pineapple Pager (PAGERCTL library is bundled in `lib/`)
 - External USB Bluetooth adapter (CSR8510 or RTL8761B recommended — the built-in MT7961 has a broken ACL data path)
 - Internet connection for first-run dependency installation (python3, mpg123)
 
 ## Installation
 
-1. Copy the entire `payload/` directory to the Pager:
+1. Copy this entire repo to the Pager:
 
 ```bash
-scp -r payload/* root@172.16.52.1:/root/payloads/user/utilities/pageramp/
+scp -r . root@172.16.52.1:/root/payloads/user/utilities/pageramp/
 ```
 
 2. On the Pager, the payload will appear in the utilities menu. On first launch, it will prompt to install dependencies (python3 and mpg123) — press GREEN to install.
@@ -60,7 +60,7 @@ With PagerAmp running, navigate to `http://172.16.52.1:1337` from any device on 
 The built-in MediaTek MT7961 Bluetooth on the Pineapple Pager has a firmware bug that prevents audio streaming (ACL data path is broken). You need an external USB Bluetooth adapter:
 
 - **CSR8510** — Works out of the box
-- **RTL8761B** — Firmware files are bundled in `payload/firmware/rtl_bt/`
+- **RTL8761B** — Firmware files are bundled in `firmware/rtl_bt/`
 
 Plug in the adapter before launching PagerAmp. The payload automatically detects the external adapter and skips the built-in MT7961.
 
@@ -79,36 +79,31 @@ PagerAmp uses **mpg123** in remote mode (`--remote`) as the audio backend, sendi
 ## Project Structure
 
 ```
-payload/                 # Deploy this to the Pager
-├── payload.sh           # Entry point (bash launcher)
-├── pageramp.py          # Main Python application
+pageramp/                    # Clone/copy to /root/payloads/user/utilities/pageramp/
+├── payload.sh               # Entry point (bash launcher)
+├── pageramp.py              # Main Python application
 ├── player/
-│   ├── client.py        # mpg123 remote-mode client
-│   └── playlist.py      # Playlist manager
+│   ├── client.py            # mpg123 remote-mode client
+│   └── playlist.py          # Playlist manager
 ├── ui/
-│   ├── screens.py       # UI screens (now playing, playlist, file browser, etc.)
-│   ├── widgets.py       # UI widgets (buttons, sliders, lists)
-│   ├── bluetooth.py     # Bluetooth pairing/connection screen
-│   └── skin.py          # Skin loader
+│   ├── screens.py           # UI screens (now playing, playlist, file browser, etc.)
+│   ├── widgets.py           # UI widgets (buttons, sliders, lists)
+│   ├── bluetooth.py         # Bluetooth pairing/connection screen
+│   └── skin.py              # Skin loader
 ├── web/
-│   ├── upload_server.py # HTTP upload server (port 1337)
-│   └── templates/       # HTML templates
+│   ├── upload_server.py     # HTTP upload server (port 1337)
+│   └── templates/           # HTML templates
 ├── bin/
-│   └── bluealsad        # BlueALSA daemon (MIPS binary)
-├── bt/lib/              # BlueALSA + ALSA shared libraries
-├── lib/                 # pagerctl library (libpagerctl.so + pagerctl.py)
-├── config/              # ALSA and D-Bus configuration
-├── skins/               # Skin assets (backgrounds, buttons, knobs)
-├── fonts/               # DejaVuSansMono.ttf
-├── firmware/rtl_bt/     # RTL8761B Bluetooth firmware
-├── data/                # Runtime data (settings.json, created at runtime)
-└── music/               # Music directory (upload MP3s here or via web)
-
-src/                     # Development tools (not needed on the Pager)
-├── pagerampd.c          # Old C audio daemon source (replaced by mpg123)
-├── build_pagerampd.sh   # Cross-compilation script for pagerampd
-├── gen_skins.py         # Skin asset generator
-└── launch_pageramp.sh   # Standalone dev launcher
+│   └── bluealsad            # BlueALSA daemon (MIPS binary)
+├── bt/lib/                  # BlueALSA + ALSA shared libraries
+├── lib/                     # pagerctl library (libpagerctl.so + pagerctl.py)
+├── config/                  # ALSA and D-Bus configuration
+├── skins/                   # Skin assets (backgrounds, buttons, knobs)
+├── fonts/                   # DejaVuSansMono.ttf
+├── firmware/rtl_bt/         # RTL8761B Bluetooth firmware
+├── data/                    # Runtime data (settings.json, created at runtime)
+├── music/                   # Default demo tracks + user uploads
+└── src/                     # Development tools (not needed on the Pager)
 ```
 
 ## Author

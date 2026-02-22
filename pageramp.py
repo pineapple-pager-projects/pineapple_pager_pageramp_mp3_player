@@ -195,13 +195,16 @@ class PagerAmp:
         if screen:
             screen.update(status)
 
-        # Auto-advance: when a track finishes, play the next one
+        # Auto-advance: when a track finishes naturally, play the next one
+        # (skip if user pressed stop manually)
         cur_state = status.get("state", "stopped")
         advance = False
         if self.client.track_finished:
             self.client.clear_track_finished()
-            advance = True
-        elif self._prev_state == "playing" and cur_state == "stopped":
+            if not self.client._manual_stop:
+                advance = True
+        elif (self._prev_state == "playing" and cur_state == "stopped"
+              and not self.client._manual_stop):
             advance = True
         self._prev_state = cur_state
 

@@ -258,10 +258,11 @@ if [ -n "$HCI" ]; then
         bluetoothd -n &
         sleep 2
     fi
-    bluetoothctl pairable on 2>/dev/null
     if [ -n "$ADAPTER_MAC" ]; then
         bluetoothctl select "$ADAPTER_MAC" 2>/dev/null
     fi
+    bluetoothctl power on 2>/dev/null
+    bluetoothctl pairable on 2>/dev/null
     hciconfig "$HCI" name "Pineapple Pager" 2>/dev/null
     bluetoothctl system-alias "Pineapple Pager" 2>/dev/null
 

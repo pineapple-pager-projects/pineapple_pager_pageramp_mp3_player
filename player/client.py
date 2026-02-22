@@ -30,6 +30,7 @@ class Mpg123Client:
         self._volume = 80
         self._was_playing = False
         self._track_finished = False
+        self._manual_stop = False
 
     def start(self):
         """Launch mpg123 in remote mode."""
@@ -92,6 +93,7 @@ class Mpg123Client:
 
     def play(self, path):
         self._track_finished = False
+        self._manual_stop = False
         self._was_playing = False
         self._send("LOAD " + path)
 
@@ -105,6 +107,7 @@ class Mpg123Client:
         self._send("PAUSE")
 
     def stop(self):
+        self._manual_stop = True
         self._send("STOP")
 
     def seek(self, value):

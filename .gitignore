@@ -1,10 +1,10 @@
 # User data
-payload/data/settings.json
-payload/music/*.mp3
-payload/music/*.wav
-# Keep the default demo track
-!payload/music/Hak5-Pager.mp3
-!payload/music/brAinphreAk - PineApple PAger.mp3
+data/settings.json
+music/*.mp3
+music/*.wav
+# Keep the default demo tracks
+!music/Hak5-Pager.mp3
+!music/brAinphreAk - PineApple PAger.mp3
 
 # Python cache
 __pycache__/
