@@ -30,7 +30,6 @@ class Mpg123Client:
         self._volume = 80
         self._was_playing = False
         self._track_finished = False
-        self._manual_stop = False
 
     def start(self):
         """Launch mpg123 in remote mode."""
@@ -47,7 +46,7 @@ class Mpg123Client:
         if our_ld not in ld:
             env["LD_LIBRARY_PATH"] = our_ld + (":" + ld if ld else "")
 
-        cmd = ["mpg123", "-R", "--stereo", "-a", "bluealsa"]
+        cmd = ["mpg123", "-R", "--stereo", "-a", "btmix"]
         self._proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
@@ -93,7 +92,6 @@ class Mpg123Client:
 
     def play(self, path):
         self._track_finished = False
-        self._manual_stop = False
         self._was_playing = False
         self._send("LOAD " + path)
 
@@ -107,7 +105,6 @@ class Mpg123Client:
         self._send("PAUSE")
 
     def stop(self):
-        self._manual_stop = True
         self._send("STOP")
 
     def seek(self, value):
