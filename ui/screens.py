@@ -8,6 +8,7 @@ Each screen has:
 """
 
 import os
+import time
 
 from ui.widgets import (ScrollText, ProgressBar, VolumeBar, TrackList,
                         TransportIcons, TimeDisplay, FONT_PATH,
@@ -220,7 +221,14 @@ class NowPlayingScreen:
         # Dynamic knob image handles (not baked into bg)
         self._slider_handle = None   # seek knob (slider.png)
         self._vol_knob_handle = None  # vol/bal knob (slider2.png)
+        self._slider_active_handle = None   # dark-tint seek knob
+        self._vol_knob_active_handle = None  # dark-tint vol/bal knob
         self._knobs_loaded = False
+
+        # Temporary value overlay timers
+        self._vol_show_until = 0
+        self._bal_show_until = 0
+        self._VALUE_DISPLAY_SECS = 2
 
     def layout(self, skin):
         """Calculate widget positions based on skin style."""
@@ -331,8 +339,10 @@ class NowPlayingScreen:
         elif self._focus == self.FOCUS_VOLUME:
             if button == BTN_LEFT:
                 self.client.adjust_volume(-5)
+                self._vol_show_until = time.time() + self._VALUE_DISPLAY_SECS
             elif button == BTN_RIGHT:
                 self.client.adjust_volume(5)
+                self._vol_show_until = time.time() + self._VALUE_DISPLAY_SECS
             elif button == BTN_UP:
                 self._focus = self.FOCUS_BALANCE
             elif button == BTN_DOWN:
@@ -343,8 +353,10 @@ class NowPlayingScreen:
         elif self._focus == self.FOCUS_BALANCE:
             if button == BTN_LEFT:
                 self._balance = max(0, self._balance - 5)
+                self._bal_show_until = time.time() + self._VALUE_DISPLAY_SECS
             elif button == BTN_RIGHT:
                 self._balance = min(100, self._balance + 5)
+                self._bal_show_until = time.time() + self._VALUE_DISPLAY_SECS
             elif button == BTN_DOWN:
                 self._focus = self.FOCUS_VOLUME
             elif button == BTN_B:
@@ -434,6 +446,12 @@ class NowPlayingScreen:
                 if self._vol_knob_handle:
                     pager.free_image(self._vol_knob_handle)
                 self._vol_knob_handle = None
+                if self._slider_active_handle:
+                    pager.free_image(self._slider_active_handle)
+                self._slider_active_handle = None
+                if self._vol_knob_active_handle:
+                    pager.free_image(self._vol_knob_active_handle)
+                self._vol_knob_active_handle = None
                 self._knobs_loaded = False
                 for h in self._toggle_handles.values():
                     if h is not None:
@@ -471,6 +489,12 @@ class NowPlayingScreen:
                 vol_path = os.path.join(skin_dir, "vol-knob.png")
                 if os.path.exists(vol_path):
                     self._vol_knob_handle = pager.load_image(vol_path)
+                knob_a = os.path.join(skin_dir, "slider-knob-active.png")
+                if os.path.exists(knob_a):
+                    self._slider_active_handle = pager.load_image(knob_a)
+                vol_a = os.path.join(skin_dir, "vol-knob-active.png")
+                if os.path.exists(vol_a):
+                    self._vol_knob_active_handle = pager.load_image(vol_a)
                 self._knobs_loaded = True
             if not self._toggle_loaded:
                 for fname, _, _ in self._toggle_sprite_info:
@@ -569,7 +593,11 @@ class NowPlayingScreen:
                 knob_w = 29
                 knob_range = groove_x1 - groove_x0 - knob_w
                 kx = groove_x0 + int(knob_range * self.progress.position)
-                pager.draw_image(kx, 140, self._slider_handle)
+                if (self._focus == self.FOCUS_SEEK
+                        and self._slider_active_handle):
+                    pager.draw_image(kx, 139, self._slider_active_handle)
+                else:
+                    pager.draw_image(kx, 139, self._slider_handle)
         else:
             self.progress.draw(pager, c("progress_bg"),
                               c("progress_fill"), c("progress_knob"),
@@ -581,7 +609,11 @@ class NowPlayingScreen:
             knob_w = 28  # vol-knob.png width
             vol_range = vx1 - vx0 - knob_w
             vol_x = vx0 + int(vol_range * self.volume.level / 100)
-            pager.draw_image(vol_x, vy, self._vol_knob_handle)
+            if (self._focus == self.FOCUS_VOLUME
+                    and self._vol_knob_active_handle):
+                pager.draw_image(vol_x, vy, self._vol_knob_active_handle)
+            else:
+                pager.draw_image(vol_x, vy, self._vol_knob_handle)
         elif not bg_buttons:
             self.volume.draw(pager, c("volume_bg"), c("volume_fill"),
                             c("text_dim"), skin.font("label"))
@@ -592,7 +624,33 @@ class NowPlayingScreen:
             knob_w = 28
             bal_range = bx1 - bx0 - knob_w
             bal_x = bx0 + int(bal_range * self._balance / 100)
-            pager.draw_image(bal_x, by, self._vol_knob_handle)
+            if (self._focus == self.FOCUS_BALANCE
+                    and self._vol_knob_active_handle):
+                pager.draw_image(bal_x, by, self._vol_knob_active_handle)
+            else:
+                pager.draw_image(bal_x, by, self._vol_knob_handle)
+
+        # --- Temporary value overlay (volume % / balance L-R) ---
+        now = time.time()
+        if now < self._vol_show_until:
+            vol_text = "VOL: %d%%" % self.volume.level
+            tw = pager.ttf_width(vol_text, FONT_PATH, 12)
+            ox = (SCREEN_W - tw) // 2
+            oy = 68
+            pager.fill_rect(ox - 4, oy - 2, tw + 8, 18, c("menu_bg"))
+            pager.draw_ttf(ox, oy, vol_text, c("accent"), FONT_PATH, 12)
+        if now < self._bal_show_until:
+            if self._balance == 50:
+                bal_text = "BAL: CENTER"
+            elif self._balance < 50:
+                bal_text = "BAL: %dL" % (50 - self._balance)
+            else:
+                bal_text = "BAL: %dR" % (self._balance - 50)
+            tw = pager.ttf_width(bal_text, FONT_PATH, 12)
+            ox = (SCREEN_W - tw) // 2
+            oy = 68
+            pager.fill_rect(ox - 4, oy - 2, tw + 8, 18, c("menu_bg"))
+            pager.draw_ttf(ox, oy, bal_text, c("accent"), FONT_PATH, 12)
 
         # --- Transport icons ---
         if bg_buttons:
@@ -905,19 +963,29 @@ class FileBrowserScreen:
 class SettingsScreen:
     """Settings and preferences screen."""
 
+    BRIGHTNESS_STEPS = [20, 40, 60, 80, 100]
+
     def __init__(self, skin_manager, playlist, settings):
         self.skin_manager = skin_manager
         self.playlist = playlist
         self.settings = settings
+        self.pager = None
         self.items = []
         self.selected = 0
         self.font_size = 14
         self.line_height = 24
         self._build_items()
 
+    def set_pager(self, pager):
+        """Store pager reference for brightness control."""
+        self.pager = pager
+
     def _build_items(self):
         self.items = [
             ("Theme", self.skin_manager.current_name, self._cycle_theme),
+            ("Brightness",
+             lambda: "%d%%" % self.settings.get("brightness", 100),
+             self._cycle_brightness),
             ("Shuffle", lambda: "On" if self.playlist.shuffle else "Off",
              self._toggle_shuffle),
             ("Repeat", lambda: self.playlist.repeat_label,
@@ -936,6 +1004,19 @@ class SettingsScreen:
 
     def _cycle_repeat(self):
         self.playlist.cycle_repeat()
+
+    def _cycle_brightness(self):
+        cur = self.settings.get("brightness", 100)
+        steps = self.BRIGHTNESS_STEPS
+        try:
+            idx = steps.index(cur)
+        except ValueError:
+            idx = len(steps) - 1
+        idx = (idx + 1) % len(steps)
+        val = steps[idx]
+        self.settings["brightness"] = val
+        if self.pager:
+            self.pager.set_brightness(val)
 
     def handle_input(self, button, event_type, pager):
         BTN_A = 0x10
@@ -1010,7 +1091,6 @@ class MenuOverlay:
 
     def __init__(self):
         self.items = [
-            "Now Playing",
             "Playlist",
             "Browse Files",
             "Settings",
@@ -1021,7 +1101,6 @@ class MenuOverlay:
         self.font_size = 14
         self.line_height = 26
         self._target_map = {
-            "Now Playing": "now_playing",
             "Playlist": "playlist",
             "Browse Files": "browser",
             "Settings": "settings",
@@ -1055,7 +1134,7 @@ class MenuOverlay:
 
         # Semi-transparent overlay effect — dark background
         menu_w = 240
-        menu_h = len(self.items) * self.line_height + 16
+        menu_h = len(self.items) * self.line_height + 12
         mx = (SCREEN_W - menu_w) // 2
         my = (SCREEN_H - menu_h) // 2
 
@@ -1063,13 +1142,8 @@ class MenuOverlay:
         pager.fill_rect(mx, my, menu_w, menu_h, c("menu_bg"))
         pager.rect(mx, my, menu_w, menu_h, c("separator"))
 
-        # Title
-        pager.draw_ttf(mx + 8, my + 2, "Menu", c("accent"),
-                      FONT_PATH, skin.font("title"))
-        pager.hline(mx + 1, my + 18, menu_w - 2, c("separator"))
-
         # Items
-        y = my + 22
+        y = my + 6
         for i, item in enumerate(self.items):
             is_sel = (i == self.selected)
             if is_sel:
