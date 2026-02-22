@@ -49,7 +49,7 @@ class Mpg123Client:
             env["LD_LIBRARY_PATH"] = our_ld + (":" + ld if ld else "")
 
         mpg123 = os.path.join(self._script_dir, "bin", "mpg123")
-        cmd = [mpg123, "-R", "--stereo", "-a", "btmix"]
+        cmd = [mpg123, "-R", "--stereo", "-a", "bluealsa"]
         self._proc = subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
