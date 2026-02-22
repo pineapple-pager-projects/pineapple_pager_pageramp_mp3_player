@@ -168,7 +168,7 @@ class BluetoothScreen:
         env = dict(os.environ, LD_LIBRARY_PATH=lib_path)
         subprocess.Popen(
             [bluealsad, "-i", self.hci, "-p", "a2dp-source",
-             "-p", "a2dp-sink", "--keep-alive=5", "-S"],
+             "-p", "a2dp-sink", "--keep-alive=30", "-S"],
             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         time.sleep(3)  # Wait for profile registration

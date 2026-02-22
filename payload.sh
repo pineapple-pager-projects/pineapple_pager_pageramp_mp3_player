@@ -268,7 +268,7 @@ if [ -n "$HCI" ]; then
 
     # Start bluealsad
     if ! pidof bluealsad >/dev/null 2>&1; then
-        "$PAYLOAD_DIR/bin/bluealsad" -i "$HCI" -p a2dp-source -p a2dp-sink --keep-alive=5 -S &
+        "$PAYLOAD_DIR/bin/bluealsad" -i "$HCI" -p a2dp-source -p a2dp-sink --keep-alive=30 -S &
         BLUEALSAD_PID=$!
         BLUEALSAD_STARTED=1
         sleep 3
