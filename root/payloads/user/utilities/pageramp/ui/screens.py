@@ -184,27 +184,11 @@ class NowPlayingScreen:
         self._active_handles = [None] * self._BTN_COUNT
         self._active_loaded = False
 
-        # Active sprite info: (filename, x, y) matching gen_skins.py
-        self._active_sprite_info = [
-            ("previous-active.png", 17, 176),
-            ("play-active.png",     59, 176),
-            ("pause-active.png",   101, 176),
-            ("stop-active.png",    143, 176),
-            ("next-active.png",    185, 176),
-            ("eject-active.png",   229, 178),
-            ("shuffle-active.png", 279, 178),
-            ("repeat-active.png",  369, 178),
-        ]
-
-        # Toggle sprite handles: shuffle/repeat ON state overlays
-        self._toggle_handles = {}  # filename → image handle
+        # Sprite info loaded from skin JSON (populated in layout())
+        self._active_sprite_info = []
+        self._toggle_handles = {}
         self._toggle_loaded = False
-        self._toggle_sprite_info = [
-            ("shuffle-toggled.png",        279, 178),
-            ("shuffle-active-toggled.png", 279, 178),
-            ("repeat-toggled.png",         369, 178),
-            ("repeat-active-toggled.png",  369, 178),
-        ]
+        self._toggle_sprite_info = []
 
         self._layout_done = False
         self._layout_style = None
@@ -225,69 +209,82 @@ class NowPlayingScreen:
         self._VALUE_DISPLAY_SECS = 2
 
     def layout(self, skin):
-        """Calculate widget positions based on skin style."""
-        style = skin.style
-        pad = 8
+        """Calculate widget positions from skin layout JSON."""
+        L = skin.layout  # shorthand for layout lookup
 
-        if style == "modern":
-            title_fs = skin.font("track")
-            self.title_scroll = ScrollText(pad, 20, SCREEN_W - pad * 2,
-                                           title_fs, speed=1)
-            time_fs = skin.font("time")
-            self.time_display = TimeDisplay(0, 70, time_fs)
-            self.progress = ProgressBar(pad, 130, SCREEN_W - pad * 2, 4)
-            tw = TransportIcons(0, 0, 14, 12).total_width
-            self.transport = TransportIcons((SCREEN_W - tw) // 2, 155,
-                                           14, 12)
-            self.volume = VolumeBar(SCREEN_W - 140, 195, 100, 4)
-            # Shuffle/repeat text positions after transport row
-            tx = self.transport.x + self.transport.total_width + 16
-            ty = self.transport.y
-            self._shuffle_box = (tx, ty - 2, 36,
-                                 self.transport.size + 4)
-            self._repeat_box = (tx + 44, ty - 2, 36,
-                                self.transport.size + 4)
+        # Defaults for each element (classic Winamp positions)
+        td = L("time_display") or {}
+        time_fs = skin.font("time")
+        self.time_display = TimeDisplay(
+            td.get("x", 24), td.get("y", 48), time_fs)
 
-        elif style == "retro":
-            title_fs = skin.font("track")
-            self.title_scroll = ScrollText(pad, 8, SCREEN_W - pad * 2,
-                                           title_fs, speed=3)
-            time_fs = skin.font("time")
-            self.time_display = TimeDisplay(pad, 40, time_fs)
-            self.progress = ProgressBar(pad, 80, SCREEN_W - pad * 2, 10)
-            tw = TransportIcons(0, 0, 18, 10).total_width
-            self.transport = TransportIcons((SCREEN_W - tw) // 2, 120,
-                                           18, 10)
-            self.volume = VolumeBar(pad, 170, 120, 8)
-            tx = self.transport.x + self.transport.total_width + 16
-            ty = self.transport.y
-            self._shuffle_box = (tx, ty - 2, 36,
-                                 self.transport.size + 4)
-            self._repeat_box = (tx + 44, ty - 2, 36,
-                                self.transport.size + 4)
+        ts = L("title_scroll") or {}
+        title_fs = skin.font("track")
+        self.title_scroll = ScrollText(
+            ts.get("x", 195), ts.get("y", 50),
+            ts.get("w", 265), title_fs,
+            speed=ts.get("speed", 2))
 
-        else:
-            # Classic — positions match Winamp background per placement.png
-            # Left LCD area (x=20-178, y=45-109)
-            time_fs = skin.font("time")
-            self.time_display = TimeDisplay(24, 48, time_fs)
-            # Right info panel (x=191-463, y=46-67) — scrolling title
-            title_fs = skin.font("track")
-            self.title_scroll = ScrollText(195, 50, 265, title_fs,
-                                           speed=2)
-            # Seek bar — full width in groove (y≈140, spans entire width)
-            self.progress = ProgressBar(16, 140, 448, 4)
-            # Volume — on the orange stripe (y≈119, x=191-295)
-            # (bg_buttons mode: only fill drawn, no bg rect)
-            self.volume = VolumeBar(191, 119, 104, 5)
-            # Transport — 5 icon buttons matching background sprites
-            self.transport = TransportIcons(20, 175, 30, 12)
-            # Shuffle/repeat sprite areas in background
-            self._shuffle_box = (279, 178, 72, 20)
-            self._repeat_box = (369, 178, 43, 20)
+        pb = L("progress_bar") or {}
+        self.progress = ProgressBar(
+            pb.get("x", 16), pb.get("y", 140),
+            pb.get("w", 448), pb.get("h", 4))
+
+        vb = L("volume_bar") or {}
+        self.volume = VolumeBar(
+            vb.get("x", 191), vb.get("y", 119),
+            vb.get("w", 104), vb.get("h", 5))
+
+        tp = L("transport") or {}
+        self.transport = TransportIcons(
+            tp.get("x", 20), tp.get("y", 175),
+            tp.get("spacing", 30), tp.get("gap", 12))
+
+        sb = L("shuffle_box") or {}
+        self._shuffle_box = (
+            sb.get("x", 279), sb.get("y", 178),
+            sb.get("w", 72), sb.get("h", 20))
+
+        rb = L("repeat_box") or {}
+        self._repeat_box = (
+            rb.get("x", 369), rb.get("y", 178),
+            rb.get("w", 43), rb.get("h", 20))
+
+        # Load sprite definitions from skin JSON
+        sprites = skin.sprites()
+        buttons = sprites.get("buttons", [])
+        toggles = sprites.get("toggles", {})
+
+        # Button sprites (transport + eject)
+        self._active_sprite_info = [
+            (b["file"], b["x"], b["y"]) for b in buttons
+        ]
+        # Add shuffle and repeat active sprites to button list
+        if "shuffle" in toggles:
+            s = toggles["shuffle"]
+            self._active_sprite_info.append((s["file"], s["x"], s["y"]))
+        if "repeat" in toggles:
+            r = toggles["repeat"]
+            self._active_sprite_info.append((r["file"], r["x"], r["y"]))
+
+        # Toggle sprites (on/active states for shuffle/repeat)
+        self._toggle_sprite_info = []
+        for key in ("shuffle_on", "shuffle_active", "repeat_on",
+                     "repeat_active"):
+            if key in toggles:
+                t = toggles[key]
+                self._toggle_sprite_info.append(
+                    (t["file"], t["x"], t["y"]))
+
+        # Reset loaded state so sprites reload with new skin
+        self._active_loaded = False
+        self._toggle_loaded = False
+        self._knobs_loaded = False
+        self._active_handles = [None] * len(self._active_sprite_info)
+        self._toggle_handles = {}
 
         self._layout_done = True
-        self._layout_style = skin.style
+        self._layout_style = skin.name
 
     def handle_input(self, button, event_type, pager):
         """Handle d-pad navigation between focus rows."""
@@ -416,7 +413,7 @@ class NowPlayingScreen:
 
     def draw(self, pager, skin):
         """Render the now playing screen."""
-        if not self._layout_done or skin.style != self._layout_style:
+        if not self._layout_done or skin.name != self._layout_style:
             self.layout(skin)
 
         c = skin.color
@@ -466,8 +463,8 @@ class NowPlayingScreen:
 
         # --- Load sprites once (after bg is loaded) ---
         if bg_buttons:
-            skin_dir = (os.path.dirname(skin.bg_path)
-                        if skin.bg_path else "")
+            skin_dir = skin.skin_dir or (
+                os.path.dirname(skin.bg_path) if skin.bg_path else "")
             if not self._active_loaded:
                 for i, (fname, _, _) in enumerate(
                         self._active_sprite_info):
@@ -477,18 +474,19 @@ class NowPlayingScreen:
                             apath)
                 self._active_loaded = True
             if not self._knobs_loaded:
-                knob_path = os.path.join(skin_dir, "slider-knob.png")
-                if os.path.exists(knob_path):
-                    self._slider_handle = pager.load_image(knob_path)
-                vol_path = os.path.join(skin_dir, "vol-knob.png")
-                if os.path.exists(vol_path):
-                    self._vol_knob_handle = pager.load_image(vol_path)
-                knob_a = os.path.join(skin_dir, "slider-knob-active.png")
-                if os.path.exists(knob_a):
-                    self._slider_active_handle = pager.load_image(knob_a)
-                vol_a = os.path.join(skin_dir, "vol-knob-active.png")
-                if os.path.exists(vol_a):
-                    self._vol_knob_active_handle = pager.load_image(vol_a)
+                knobs = skin.sprites().get("knobs", {})
+                for attr, key, fallback in [
+                    ("_slider_handle", "seek", "slider-knob.png"),
+                    ("_vol_knob_handle", "vol", "vol-knob.png"),
+                    ("_slider_active_handle", "seek_active",
+                     "slider-knob-active.png"),
+                    ("_vol_knob_active_handle", "vol_active",
+                     "vol-knob-active.png"),
+                ]:
+                    fname = knobs.get(key, fallback)
+                    path = os.path.join(skin_dir, fname)
+                    if os.path.exists(path):
+                        setattr(self, attr, pager.load_image(path))
                 self._knobs_loaded = True
             if not self._toggle_loaded:
                 for fname, _, _ in self._toggle_sprite_info:

@@ -1,0 +1,78 @@
+{
+    "name": "Winamp Classic",
+    "style": "classic",
+    "background": "classic_bg.png",
+    "bg_has_buttons": true,
+    "colors": {
+        "bg": "#2B2F3A",
+        "text": "#00FF00",
+        "text_dim": "#586068",
+        "title_bar_bg": "#3A4058",
+        "title_bar_text": "#FFFFFF",
+        "time": "#00FF00",
+        "progress_bg": "#0A0A0A",
+        "progress_fill": "#FF8800",
+        "progress_knob": "#AAAAAA",
+        "volume_bg": "#0A0A0A",
+        "volume_fill": "#00CC00",
+        "transport": "#8A8E9A",
+        "transport_active": "#00FF00",
+        "track_highlight": "#3A4058",
+        "track_highlight_text": "#FFFFFF",
+        "track_text": "#00CC00",
+        "track_number": "#586068",
+        "shuffle_on": "#00FF00",
+        "shuffle_off": "#444450",
+        "repeat_on": "#00FF00",
+        "repeat_off": "#444450",
+        "menu_bg": "#232838",
+        "menu_selected": "#00FF00",
+        "menu_text": "#8A8E9A",
+        "separator": "#4A5068",
+        "accent": "#00FF00",
+        "warning": "#FF4444",
+        "info": "#4488FF"
+    },
+    "fonts": {
+        "title": 12,
+        "track": 16,
+        "time": 28,
+        "label": 10,
+        "menu": 14,
+        "status": 11,
+        "browser": 12
+    },
+    "layout": {
+        "time_display": { "x": 24, "y": 48 },
+        "title_scroll": { "x": 195, "y": 50, "w": 265, "speed": 2 },
+        "progress_bar": { "x": 16, "y": 140, "w": 448, "h": 4 },
+        "volume_bar":   { "x": 191, "y": 119, "w": 104, "h": 5 },
+        "transport":    { "x": 20, "y": 175, "spacing": 30, "gap": 12 },
+        "shuffle_box":  { "x": 279, "y": 178, "w": 72, "h": 20 },
+        "repeat_box":   { "x": 369, "y": 178, "w": 43, "h": 20 }
+    },
+    "sprites": {
+        "buttons": [
+            { "file": "previous-active.png", "x": 17, "y": 176 },
+            { "file": "play-active.png",     "x": 59, "y": 176 },
+            { "file": "pause-active.png",    "x": 101, "y": 176 },
+            { "file": "stop-active.png",     "x": 143, "y": 176 },
+            { "file": "next-active.png",     "x": 185, "y": 176 },
+            { "file": "eject-active.png",    "x": 229, "y": 178 }
+        ],
+        "toggles": {
+            "shuffle":        { "file": "shuffle-active.png",         "x": 279, "y": 178 },
+            "shuffle_on":     { "file": "shuffle-toggled.png",        "x": 279, "y": 178 },
+            "shuffle_active": { "file": "shuffle-active-toggled.png", "x": 279, "y": 178 },
+            "repeat":         { "file": "repeat-active.png",          "x": 369, "y": 178 },
+            "repeat_on":      { "file": "repeat-toggled.png",         "x": 369, "y": 178 },
+            "repeat_active":  { "file": "repeat-active-toggled.png",  "x": 369, "y": 178 }
+        },
+        "knobs": {
+            "seek":        "slider-knob.png",
+            "seek_active": "slider-knob-active.png",
+            "vol":         "vol-knob.png",
+            "vol_active":  "vol-knob-active.png"
+        }
+    }
+}

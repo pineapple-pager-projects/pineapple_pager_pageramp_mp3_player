@@ -7,7 +7,7 @@ A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://
 ## Features
 
 - MP3/WAV playback via Bluetooth A2DP (speaker/headphones)
-- Skinnable Winamp-style UI with 3 built-in skins (Classic, Modern, Retro)
+- Skinnable Winamp-style UI (classic skin included, easily customizable)
 - Web upload interface at `http://172.16.52.1:1337` for adding music from your phone/laptop
 - Debug log download from the web interface for troubleshooting
 - Playlist management with shuffle and repeat modes
@@ -156,7 +156,8 @@ pageramp/                    # Payload: /root/payloads/user/utilities/pageramp/
 ├── bt/lib/                  # BlueALSA + ALSA shared libraries
 ├── lib/                     # pagerctl library (libpagerctl.so + pagerctl.py)
 ├── config/                  # ALSA and D-Bus configuration
-├── skins/                   # Skin assets (backgrounds, buttons, knobs)
+├── skins/                   # Theme folders (each contains JSON config + all assets)
+│   └── classic/             # Winamp Classic theme (bg, buttons, knobs, colors, layout)
 ├── fonts/                   # DejaVuSansMono.ttf
 ├── firmware/rtl_bt/         # RTL8761B Bluetooth firmware
 ├── data/                    # Runtime data (settings.json, created at runtime)

@@ -64,11 +64,12 @@ DEFAULT_ELEMENTS = {
 
 
 class Skin:
-    """Theme/skin with color and font lookups."""
+    """Theme/skin with color, font, layout, and sprite lookups."""
 
     def __init__(self, skin_data=None, skins_dir=None):
         self.name = "Default"
-        self.style = "classic"  # classic, modern, retro
+        self.style = "classic"
+        self.skin_dir = skins_dir  # folder containing all theme assets
         self.bg_path = None
         self.bg_has_buttons = False
         self.font_sizes = {
@@ -82,6 +83,8 @@ class Skin:
         }
         self._colors = {}
         self._raw = {}
+        self._layout = {}
+        self._sprites = {}
 
         if skin_data:
             self._load(skin_data, skins_dir)
@@ -119,6 +122,10 @@ class Skin:
                 self.bg_path = path
         self.bg_has_buttons = data.get("bg_has_buttons", False)
 
+        # Load layout and sprite definitions
+        self._layout = data.get("layout", {})
+        self._sprites = data.get("sprites", {})
+
     def color(self, name):
         """Get RGB565 color by element name."""
         return self._colors.get(name, 0xFFFF)
@@ -126,6 +133,20 @@ class Skin:
     def font(self, element):
         """Get font size for an element."""
         return self.font_sizes.get(element, 12)
+
+    def layout(self, element):
+        """Get layout dict for an element (x, y, w, h, etc.)."""
+        return self._layout.get(element, {})
+
+    def sprites(self):
+        """Get sprite definitions dict."""
+        return self._sprites
+
+    def sprite_path(self, filename):
+        """Get full path to a sprite file in this theme's folder."""
+        if self.skin_dir and filename:
+            return os.path.join(self.skin_dir, filename)
+        return None
 
 
 class SkinManager:
@@ -142,24 +163,35 @@ class SkinManager:
         self._load_all()
 
     def _load_all(self):
-        """Load all .json skin files from skins directory."""
+        """Load skins from subdirectories of skins_dir.
+
+        Each theme is a subfolder containing a .json config and all
+        assets (background PNG, button sprites, knob sprites, etc.).
+        To create a new theme, copy an existing folder and modify.
+        """
         if not os.path.isdir(self.skins_dir):
             self.skins["Default"] = Skin()
             self.skin_names = ["Default"]
             return
 
-        for name in sorted(os.listdir(self.skins_dir)):
-            if not name.endswith(".json"):
+        for entry in sorted(os.listdir(self.skins_dir)):
+            subdir = os.path.join(self.skins_dir, entry)
+            if not os.path.isdir(subdir):
                 continue
-            path = os.path.join(self.skins_dir, name)
-            try:
-                with open(path, "r") as f:
-                    data = json.load(f)
-                skin = Skin(data, skins_dir=self.skins_dir)
-                self.skins[skin.name] = skin
-                self.skin_names.append(skin.name)
-            except (IOError, json.JSONDecodeError, ValueError):
-                continue
+            # Find the .json config in this theme folder
+            for fname in sorted(os.listdir(subdir)):
+                if not fname.endswith(".json"):
+                    continue
+                path = os.path.join(subdir, fname)
+                try:
+                    with open(path, "r") as f:
+                        data = json.load(f)
+                    skin = Skin(data, skins_dir=subdir)
+                    self.skins[skin.name] = skin
+                    self.skin_names.append(skin.name)
+                except (IOError, json.JSONDecodeError, ValueError):
+                    continue
+                break  # One config per theme folder
 
         if not self.skins:
             self.skins["Default"] = Skin()
