@@ -79,34 +79,17 @@ class BluetoothScreen:
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return ""
 
-    def _run_btmgmt(self, args, timeout=15):
-        """Run btmgmt command with output to file.
-
-        btmgmt hangs when stdout/stdin are pipes (its event loop needs
-        real file descriptors). Redirect output to a temp file and
-        inherit stdin from parent process.
-        """
-        outfile = "/tmp/pageramp_btmgmt.txt"
-        try:
-            # Shell handles redirection; Python doesn't pipe anything
-            proc = subprocess.Popen(
-                "btmgmt %s >%s 2>&1" % (args, outfile),
-                shell=True,
-            )
-            proc.wait(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-        except Exception:
-            return ""
-        try:
-            with open(outfile, "r") as f:
-                return f.read().strip()
-        except (IOError, OSError):
-            return ""
 
     def _check_adapter(self):
-        """Find USB Bluetooth adapter (skip built-in MT7961)."""
+        """Find USB Bluetooth adapter and bootstrap the entire BT stack.
+
+        On a factory-reset Pager nothing is running, so the order matters:
+        1. Find adapter via hciconfig (no dbus/bluetoothd needed)
+        2. Start dbus-daemon + install D-Bus policy
+        3. Start bluetoothd
+        4. Configure adapter via bluetoothctl (needs bluetoothd)
+        5. Start bluealsad (needs dbus + bluetoothd)
+        """
         self.message = "Looking for USB BT dongle..."
         for hci in ("hci0", "hci1"):
             info = self._run("hciconfig -a %s 2>/dev/null" % hci)
@@ -117,9 +100,7 @@ class BluetoothScreen:
                 continue
             if info:
                 self.hci = hci
-                # Extract HCI index for btmgmt
                 self.hci_index = hci.replace("hci", "")
-                # Extract MAC
                 for line in info.split("\n"):
                     if "BD Address" in line:
                         parts = line.split()
@@ -127,17 +108,29 @@ class BluetoothScreen:
                         if idx >= 0 and idx + 1 < len(parts):
                             self.adapter_mac = parts[idx + 1]
                         break
+
+                # 1. Bring adapter up (HCI level, no dbus needed)
                 self._run("hciconfig %s up" % hci)
                 self._run("hciconfig %s auth encrypt" % hci)
                 self._run('hciconfig %s name "Pineapple Pager"' % hci)
-                # Power on in bluetoothd (required for bluetoothctl operations)
+
+                # 2. dbus-daemon + policy
+                self.message = "Starting Bluetooth services..."
+                self._ensure_dbus()
+
+                # 3. bluetoothd
+                self._ensure_bluetoothd()
+
+                # 4. Configure via bluetoothctl (needs bluetoothd running)
                 if self.adapter_mac:
                     self._run("bluetoothctl select %s" % self.adapter_mac)
                 self._run("bluetoothctl power on")
                 self._run("bluetoothctl pairable on")
-                # Ensure D-Bus config and bluealsad are ready
-                self._ensure_dbus_config()
+                self._run('bluetoothctl system-alias "Pineapple Pager"')
+
+                # 5. bluealsad
                 self._ensure_bluealsad()
+
                 self.message = "Found: %s (%s)" % (hci, self.adapter_mac or "?")
                 self.state = self.SCAN
                 self._start_scan()
@@ -146,22 +139,36 @@ class BluetoothScreen:
         self.state = self.ERROR
         self.error_msg = "No USB BT dongle found.\nPlug in a dongle and try again."
 
-    def _ensure_dbus_config(self):
-        """Install BlueALSA D-Bus policy if missing and restart dbus."""
+    def _ensure_dbus(self):
+        """Ensure dbus-daemon is running and BlueALSA policy is installed."""
+        # Install policy file if missing
         dbus_conf = "/etc/dbus-1/system.d/bluealsa.conf"
-        if os.path.isfile(dbus_conf):
-            return
-        src = os.path.join(SCRIPT_DIR, "config", "bluealsa-dbus.conf")
-        if not os.path.isfile(src):
-            return
-        self._run("cp %s %s" % (src, dbus_conf), timeout=3)
-        # Restart dbus so it picks up the new policy
-        if os.path.isfile("/etc/init.d/dbus"):
-            self._run("/etc/init.d/dbus restart", timeout=5)
-        else:
-            self._run("killall dbus-daemon; sleep 1; dbus-daemon --system",
-                       timeout=5)
-        time.sleep(2)
+        policy_installed = False
+        if not os.path.isfile(dbus_conf):
+            src = os.path.join(SCRIPT_DIR, "config", "bluealsa-dbus.conf")
+            if os.path.isfile(src):
+                self._run("mkdir -p /etc/dbus-1/system.d", timeout=3)
+                self._run("cp %s %s" % (src, dbus_conf), timeout=3)
+                policy_installed = True
+
+        # Ensure dbus-daemon is running
+        if not self._run("pidof dbus-daemon"):
+            self._run("dbus-daemon --system", timeout=5)
+            time.sleep(2)
+        elif policy_installed:
+            # Restart so it picks up the new policy
+            if os.path.isfile("/etc/init.d/dbus"):
+                self._run("/etc/init.d/dbus restart", timeout=5)
+            else:
+                self._run("killall dbus-daemon; sleep 1; dbus-daemon --system",
+                           timeout=5)
+            time.sleep(2)
+
+    def _ensure_bluetoothd(self):
+        """Ensure bluetoothd is running."""
+        if not self._run("pidof bluetoothd"):
+            self._run("bluetoothd -n &", timeout=3)
+            time.sleep(2)
 
     def _ensure_bluealsad(self):
         """Ensure bluealsad is running on the correct adapter."""
@@ -169,13 +176,10 @@ class BluetoothScreen:
         if not os.path.isfile(bluealsad):
             return
 
-        # Ensure D-Bus config is installed
-        self._ensure_dbus_config()
-
         # Check if already running on the right adapter
         ps = self._run("ps w | grep bluealsad | grep -v grep")
         if ps and ("-i %s" % self.hci) in ps:
-            return  # Already on correct adapter
+            return
 
         # Kill if running on wrong adapter
         if ps:
@@ -194,29 +198,23 @@ class BluetoothScreen:
              "-p", "a2dp-sink", "--keep-alive=30", "-S"],
             env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
-        time.sleep(3)  # Wait for profile registration
+        time.sleep(3)
 
     def _start_scan(self):
         """Begin scanning for Bluetooth devices.
 
-        Uses hcitool lescan which discovers both BLE and dual-mode
-        (BR/EDR + LE) devices.  Output is captured to a temp file and
-        parsed when the scan timer expires.
+        Uses bluetoothctl scan on which discovers both BLE and BR/EDR
+        devices AND registers them with bluetoothd (required for
+        bluetoothctl pair/connect to work).
         """
         self.message = "Scanning... Put device in pairing mode!"
         self.devices = []
         self._scan_start = time.time()
-        self._scan_file = "/tmp/pageramp_bt_scan.txt"
 
-        # Ensure bluetoothd is running
-        if not self._run("pidof bluetoothd"):
-            self._run("bluetoothd -n &", timeout=3)
-            time.sleep(2)
-
-        # hcitool lescan — discovers BLE + dual-mode devices
+        # bluetoothctl scan on — registers devices with bluetoothd
         subprocess.Popen(
-            "timeout %d hcitool -i %s lescan >%s 2>/dev/null" % (
-                self._scan_duration, self.hci, self._scan_file),
+            "timeout %d bluetoothctl scan on >/dev/null 2>&1"
+            % self._scan_duration,
             shell=True,
         )
 
@@ -231,7 +229,7 @@ class BluetoothScreen:
         self.devices = []
         seen = set()
 
-        # 1. Paired devices (always show)
+        # 1. Paired devices first
         paired = self._run("bluetoothctl devices Paired 2>/dev/null")
         for line in paired.split("\n"):
             if line.startswith("Device "):
@@ -243,32 +241,21 @@ class BluetoothScreen:
                         self.devices.append((mac, name + " [paired]"))
                         seen.add(mac)
 
-        # 2. Scanned devices from hcitool lescan output
-        scan_file = getattr(self, "_scan_file", "/tmp/pageramp_bt_scan.txt")
-        scan_output = ""
-        try:
-            with open(scan_file, "r") as f:
-                scan_output = f.read()
-        except (IOError, OSError):
-            pass
-
-        for line in scan_output.split("\n"):
-            line = line.strip()
-            if not line or "LE Scan" in line or "Scanning" in line:
-                continue
-            parts = line.split(None, 1)
-            if len(parts) >= 2 and ":" in parts[0]:
-                mac = parts[0]
-                name = parts[1]
-                # Skip unnamed entries
-                if name == "(unknown)":
-                    continue
-                # Strip LE- prefix from name
-                if name.startswith("LE-"):
-                    name = name[3:]
-                if mac not in seen:
-                    self.devices.append((mac, name))
-                    seen.add(mac)
+        # 2. All discovered devices from bluetoothctl
+        all_devs = self._run("bluetoothctl devices 2>/dev/null")
+        for line in all_devs.split("\n"):
+            if line.startswith("Device "):
+                parts = line.split(None, 2)
+                if len(parts) >= 3:
+                    mac = parts[1]
+                    name = parts[2]
+                    # Strip LE- prefix
+                    if name.startswith("LE-"):
+                        name = name[3:]
+                    # Skip unnamed/random-MAC entries
+                    if mac not in seen and name and ":" not in name:
+                        self.devices.append((mac, name))
+                        seen.add(mac)
 
         # Saved device as fallback
         saved = self.settings.get("bt_device_mac")
@@ -303,32 +290,19 @@ class BluetoothScreen:
                       % (mac, asound_path))
 
     def _do_pair(self, mac):
-        """Pair with btmgmt. Returns True on success.
+        """Pair with bluetoothctl. Returns True on success."""
+        self._log("bluetoothctl pair: %s" % mac)
+        result = self._run("bluetoothctl pair %s 2>&1" % mac, timeout=20)
+        self._log("pair result: [%s]" % result[:300])
 
-        btmgmt pair works reliably on CSR8510 where bluetoothctl pair
-        fails due to MGMT discovery cache issues.
-        """
-        args = ("--index %s pair -c NoInputNoOutput -t 0 %s"
-                % (self.hci_index, mac))
-        self._log("btmgmt pair: %s" % args)
-        result = self._run_btmgmt(args, timeout=20)
-        self._log("btmgmt result: [%s]" % result[:300])
-
-        # Success indicators
-        if "status 0x00" in result:
-            time.sleep(2)
+        if "Pairing successful" in result:
+            time.sleep(1)
             return True
 
-        # "Already Paired" is also fine
         if "Already Paired" in result:
             return True
 
-        # Explicit failure
-        if "failed" in result.lower():
-            self._log("btmgmt pair FAILED")
-            return False
-
-        # Ambiguous — check bluetoothd state
+        # Check bluetoothd state as fallback
         time.sleep(2)
         info = self._run("bluetoothctl info %s 2>/dev/null" % mac, timeout=5)
         return "Paired: yes" in info
@@ -405,27 +379,23 @@ class BluetoothScreen:
             self._remove_device(mac)
             # Fall through to fresh pair below
 
-        # ── Fresh pair with btmgmt ────────────────────────
+        # ── Fresh pair ───────────────────────────────────
         self.state = self.PAIR
         self.message = "Pairing with %s..." % name
 
-        # Remove any unpaired leftover entry (can have stale cache)
-        devs = self._run("bluetoothctl devices 2>/dev/null")
-        if "Device %s" % mac in devs:
-            self._log("removing leftover unpaired entry")
-            self._run("bluetoothctl remove %s" % mac, timeout=5)
-            time.sleep(1)
-
-        # Try pairing up to 2 times
+        # Try pairing up to 3 times
         paired = False
-        for pair_attempt in range(2):
+        for pair_attempt in range(3):
             self._log("pair attempt %d" % (pair_attempt + 1))
             if self._do_pair(mac):
                 paired = True
                 break
-            # Brief pause before retry
             self._log("pair attempt %d failed" % (pair_attempt + 1))
-            time.sleep(2)
+            # Remove and re-discover before retry
+            self._remove_device(mac)
+            self._run("timeout 5 bluetoothctl scan on >/dev/null 2>&1",
+                       timeout=8)
+            time.sleep(1)
 
         if not paired:
             self.state = self.ERROR

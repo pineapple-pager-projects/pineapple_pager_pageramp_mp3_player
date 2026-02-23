@@ -67,9 +67,6 @@ class StartScreen:
             if self.MENU_ITEMS[self.selected][1] == "cycle_theme":
                 self.skin_manager.next_skin()
                 self.settings["theme"] = self.skin_manager.current_name
-        elif button == BTN_B:
-            return "exit"
-
         return None
 
     def update(self, status):
@@ -402,7 +399,7 @@ class NowPlayingScreen:
         elif name == "stop":
             self.client.stop()
         elif name == "next":
-            track = self.playlist.next()
+            track = self.playlist.next(manual=True)
             if track:
                 self.client.play(track)
 
@@ -589,7 +586,7 @@ class NowPlayingScreen:
         if bg_buttons:
             if self._slider_handle:
                 groove_x0 = 26   # left edge of seek groove
-                groove_x1 = 420  # right edge of seek groove
+                groove_x1 = 430  # right edge of seek groove
                 knob_w = 29
                 knob_range = groove_x1 - groove_x0 - knob_w
                 kx = groove_x0 + int(knob_range * self.progress.position)
@@ -634,11 +631,11 @@ class NowPlayingScreen:
         now = time.time()
         if now < self._vol_show_until:
             vol_text = "VOL: %d%%" % self.volume.level
-            tw = pager.ttf_width(vol_text, FONT_PATH, 12)
+            tw = pager.ttf_width(vol_text, FONT_PATH, 16)
             ox = (SCREEN_W - tw) // 2
-            oy = 68
-            pager.fill_rect(ox - 4, oy - 2, tw + 8, 18, c("menu_bg"))
-            pager.draw_ttf(ox, oy, vol_text, c("accent"), FONT_PATH, 12)
+            oy = 78
+            pager.fill_rect(ox - 6, oy - 4, tw + 12, 24, c("title_bar_bg"))
+            pager.draw_ttf(ox, oy, vol_text, c("title_bar_text"), FONT_PATH, 16)
         if now < self._bal_show_until:
             if self._balance == 50:
                 bal_text = "BAL: CENTER"
@@ -646,11 +643,11 @@ class NowPlayingScreen:
                 bal_text = "BAL: %dL" % (50 - self._balance)
             else:
                 bal_text = "BAL: %dR" % (self._balance - 50)
-            tw = pager.ttf_width(bal_text, FONT_PATH, 12)
+            tw = pager.ttf_width(bal_text, FONT_PATH, 16)
             ox = (SCREEN_W - tw) // 2
-            oy = 68
-            pager.fill_rect(ox - 4, oy - 2, tw + 8, 18, c("menu_bg"))
-            pager.draw_ttf(ox, oy, bal_text, c("accent"), FONT_PATH, 12)
+            oy = 78
+            pager.fill_rect(ox - 6, oy - 4, tw + 12, 24, c("title_bar_bg"))
+            pager.draw_ttf(ox, oy, bal_text, c("title_bar_text"), FONT_PATH, 16)
 
         # --- Transport icons ---
         if bg_buttons:

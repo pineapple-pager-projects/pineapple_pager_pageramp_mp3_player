@@ -89,6 +89,17 @@ h2 {
     background: none;
 }
 .file-delete:hover { background: #1a0a0a; border-color: #ff4444; }
+.file-download {
+    color: #00cc00;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 8px;
+    border: 1px solid #113311;
+    border-radius: 3px;
+    background: none;
+    text-decoration: none;
+}
+.file-download:hover { background: #0a1a0a; border-color: #00cc00; }
 .empty { color: #444; font-style: italic; padding: 20px; text-align: center; }
 .progress {
     width: 100%;
@@ -128,6 +139,11 @@ h2 {
 
     <h2>Library</h2>
     <ul class="file-list" id="fileList">
+        <li class="empty">Loading...</li>
+    </ul>
+
+    <h2>Debug Logs</h2>
+    <ul class="file-list" id="logList">
         <li class="empty">Loading...</li>
     </ul>
 </div>
@@ -249,8 +265,35 @@ function escHtml(s) {
     return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Load library on page load
+function loadLogs() {
+    const logList = document.getElementById('logList');
+    fetch('/api/logs')
+        .then(r => r.json())
+        .then(data => {
+            logList.innerHTML = '';
+            if (!data.logs || data.logs.length === 0) {
+                logList.innerHTML = '<li class="empty">No log files available</li>';
+                return;
+            }
+            data.logs.forEach(f => {
+                const li = document.createElement('li');
+                li.className = 'file-item';
+                li.innerHTML = `
+                    <span class="file-name">${escHtml(f.name)}</span>
+                    <span class="file-size">${f.size_str}</span>
+                    <a class="file-download" href="/logs/${encodeURIComponent(f.name)}" download>download</a>
+                `;
+                logList.appendChild(li);
+            });
+        })
+        .catch(() => {
+            logList.innerHTML = '<li class="empty">Failed to load logs</li>';
+        });
+}
+
+// Load library and logs on page load
 loadLibrary();
+loadLogs();
 </script>
 </body>
 </html>

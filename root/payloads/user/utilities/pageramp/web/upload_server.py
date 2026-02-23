@@ -19,6 +19,11 @@ MUSIC_DIR = "/mmc/music"
 ALLOWED_EXT = {".mp3", ".wav", ".m3u"}
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 
+# Log files available for download
+LOG_FILES = {
+    "pageramp_bt.log": "/tmp/pageramp_bt.log",
+}
+
 # HTML template path
 TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             "templates")
@@ -71,6 +76,10 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._serve_page()
         elif self.path == "/api/library":
             self._serve_library()
+        elif self.path == "/api/logs":
+            self._serve_log_list()
+        elif self.path.startswith("/logs/"):
+            self._serve_log_file(self.path[6:])
         else:
             self.send_error(404)
 
@@ -185,6 +194,39 @@ class UploadHandler(BaseHTTPRequestHandler):
             self._json_response(200, {"deleted": filename})
         except OSError as e:
             self._json_response(500, {"error": str(e)})
+
+    def _serve_log_list(self):
+        logs = []
+        for name, path in LOG_FILES.items():
+            if os.path.isfile(path):
+                size = os.path.getsize(path)
+                logs.append({
+                    "name": name,
+                    "size": size,
+                    "size_str": _format_size(size),
+                })
+        self._json_response(200, {"logs": logs})
+
+    def _serve_log_file(self, name):
+        if name not in LOG_FILES:
+            self.send_error(404)
+            return
+        path = LOG_FILES[name]
+        if not os.path.isfile(path):
+            self.send_error(404)
+            return
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Disposition",
+                             "attachment; filename=\"%s\"" % name)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+        except (IOError, OSError):
+            self.send_error(500)
 
     def _json_response(self, code, data):
         body = json.dumps(data).encode("utf-8")

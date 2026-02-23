@@ -118,12 +118,16 @@ class Playlist:
         name, _ = os.path.splitext(name)
         return name.replace("_", " ").replace("-", " - ")
 
-    def next(self):
-        """Advance to next track. Returns path or None if end."""
+    def next(self, manual=False):
+        """Advance to next track. Returns path or None if end.
+
+        When manual=True (user pressed next), skip repeat-one so the
+        track actually advances.  Repeat-one only replays on auto-advance.
+        """
         if not self.order:
             return None
 
-        if self.repeat == self.REPEAT_ONE:
+        if self.repeat == self.REPEAT_ONE and not manual:
             return self.current_track()
 
         self.position += 1

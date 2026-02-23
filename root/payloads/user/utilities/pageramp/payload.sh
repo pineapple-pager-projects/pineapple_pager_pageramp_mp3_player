@@ -141,6 +141,7 @@ fi
 # 4. Kill any leftover PagerAmp processes from previous runs
 # ===================================================
 kill_pageramp_procs() {
+    # Only kill app processes on startup — BT daemons are managed in cleanup()
     killall -q pageramp.py mpg123 upload_server.py 2>/dev/null
     sleep 1
     killall -q -9 pageramp.py mpg123 upload_server.py 2>/dev/null
@@ -151,22 +152,22 @@ kill_pageramp_procs
 # 5. Cleanup handler
 # ===================================================
 cleanup() {
-    # Kill all PagerAmp processes
-    killall -q pageramp.py mpg123 upload_server.py 2>/dev/null
+    # Kill app processes first
+    killall -q pageramp.py mpg123 2>/dev/null
+    [ -n "$WEB_PID" ] && kill "$WEB_PID" 2>/dev/null
 
-    for pid in $WEB_PID; do
-        [ -n "$pid" ] && kill "$pid" 2>/dev/null
+    # Power down BT adapter cleanly BEFORE killing daemons
+    # (avoids leaving adapter in a bad state that hciconfig up can't recover from)
+    bluetoothctl power off 2>/dev/null
+    for h in hci0 hci1; do
+        hciconfig "$h" down 2>/dev/null
     done
 
-    # Kill bluealsad if we started it
-    if [ "$BLUEALSAD_STARTED" = "1" ] && [ -n "$BLUEALSAD_PID" ]; then
-        kill "$BLUEALSAD_PID" 2>/dev/null
-    fi
-
+    # Now kill BT daemons
+    killall -q bluealsad bluetoothd 2>/dev/null
     sleep 1
-
-    # Force kill stragglers
-    killall -q -9 pageramp.py mpg123 upload_server.py 2>/dev/null
+    killall -q -9 pageramp.py mpg123 bluealsad bluetoothd 2>/dev/null
+    [ -n "$WEB_PID" ] && kill -9 "$WEB_PID" 2>/dev/null
 
     # Remove D-Bus config if we installed it
     if [ "$DBUS_INSTALLED" = "1" ]; then
@@ -239,7 +240,13 @@ for h in hci0 hci1; do
 done
 
 if [ -n "$HCI" ]; then
-    hciconfig "$HCI" up 2>/dev/null
+    # Bring adapter up — retry with reset if it fails (can happen after unclean shutdown)
+    if ! hciconfig "$HCI" up 2>/dev/null; then
+        hciconfig "$HCI" down 2>/dev/null
+        hciconfig "$HCI" reset 2>/dev/null
+        sleep 2
+        hciconfig "$HCI" up 2>/dev/null
+    fi
     hciconfig "$HCI" auth encrypt 2>/dev/null
 
     # Install D-Bus config for BlueALSA
