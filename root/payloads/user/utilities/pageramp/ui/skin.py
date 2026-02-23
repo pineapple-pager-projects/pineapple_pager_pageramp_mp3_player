@@ -21,7 +21,9 @@ def _hex_to_565(hex_color):
         g = (hex_color >> 8) & 0xFF
         b = hex_color & 0xFF
         return _rgb_to_565(r, g, b)
-    s = hex_color.lstrip("#").lstrip("0x")
+    s = hex_color.lstrip("#")
+    if s.startswith("0x") or s.startswith("0X"):
+        s = s[2:]
     if len(s) == 6:
         r = int(s[0:2], 16)
         g = int(s[2:4], 16)

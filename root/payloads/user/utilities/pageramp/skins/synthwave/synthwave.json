@@ -1,0 +1,78 @@
+{
+    "name": "Synthwave",
+    "style": "classic",
+    "background": "synthwave_bg.png",
+    "bg_has_buttons": true,
+    "colors": {
+        "bg": "#1A0A2E",
+        "text": "#FF2975",
+        "text_dim": "#E070C0",
+        "title_bar_bg": "#2D1B69",
+        "title_bar_text": "#FFFFFF",
+        "time": "#FF2975",
+        "progress_bg": "#0D0221",
+        "progress_fill": "#FF2975",
+        "progress_knob": "#00F0FF",
+        "volume_bg": "#0D0221",
+        "volume_fill": "#FF2975",
+        "transport": "#C0A0E0",
+        "transport_active": "#FF2975",
+        "track_highlight": "#3D1B89",
+        "track_highlight_text": "#FFFFFF",
+        "track_text": "#FF2975",
+        "track_number": "#C0A0E0",
+        "shuffle_on": "#FF2975",
+        "shuffle_off": "#3D2060",
+        "repeat_on": "#FF2975",
+        "repeat_off": "#3D2060",
+        "menu_bg": "#150830",
+        "menu_selected": "#FF2975",
+        "menu_text": "#C0A0E0",
+        "separator": "#5030A0",
+        "accent": "#00F0FF",
+        "warning": "#FF6B6B",
+        "info": "#00F0FF"
+    },
+    "fonts": {
+        "title": 12,
+        "track": 16,
+        "time": 28,
+        "label": 10,
+        "menu": 14,
+        "status": 11,
+        "browser": 12
+    },
+    "layout": {
+        "time_display": { "x": 24, "y": 48 },
+        "title_scroll": { "x": 195, "y": 50, "w": 265, "speed": 2 },
+        "progress_bar": { "x": 16, "y": 140, "w": 448, "h": 4 },
+        "volume_bar":   { "x": 191, "y": 119, "w": 104, "h": 5 },
+        "transport":    { "x": 20, "y": 175, "spacing": 30, "gap": 12 },
+        "shuffle_box":  { "x": 279, "y": 178, "w": 72, "h": 20 },
+        "repeat_box":   { "x": 369, "y": 178, "w": 43, "h": 20 }
+    },
+    "sprites": {
+        "buttons": [
+            { "file": "previous-active.png", "x": 17, "y": 176 },
+            { "file": "play-active.png",     "x": 59, "y": 176 },
+            { "file": "pause-active.png",    "x": 101, "y": 176 },
+            { "file": "stop-active.png",     "x": 143, "y": 176 },
+            { "file": "next-active.png",     "x": 185, "y": 176 },
+            { "file": "eject-active.png",    "x": 229, "y": 178 }
+        ],
+        "toggles": {
+            "shuffle":        { "file": "shuffle-active.png",         "x": 279, "y": 178 },
+            "shuffle_on":     { "file": "shuffle-toggled.png",        "x": 279, "y": 178 },
+            "shuffle_active": { "file": "shuffle-active-toggled.png", "x": 279, "y": 178 },
+            "repeat":         { "file": "repeat-active.png",          "x": 369, "y": 178 },
+            "repeat_on":      { "file": "repeat-toggled.png",         "x": 369, "y": 178 },
+            "repeat_active":  { "file": "repeat-active-toggled.png",  "x": 369, "y": 178 }
+        },
+        "knobs": {
+            "seek":        "slider-knob.png",
+            "seek_active": "slider-knob-active.png",
+            "vol":         "vol-knob.png",
+            "vol_active":  "vol-knob-active.png"
+        }
+    }
+}

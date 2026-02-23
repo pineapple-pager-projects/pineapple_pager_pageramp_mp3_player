@@ -7,7 +7,7 @@ A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://
 ## Features
 
 - MP3/WAV playback via Bluetooth A2DP (speaker/headphones)
-- Skinnable Winamp-style UI (classic skin included, easily customizable)
+- Skinnable Winamp-style UI with 3 included themes (Classic, Synthwave, Matrix)
 - Web upload interface at `http://172.16.52.1:1337` for adding music from your phone/laptop
 - Debug log download from the web interface for troubleshooting
 - Playlist management with shuffle and repeat modes
@@ -71,7 +71,9 @@ The Now Playing screen has four focus areas you navigate between with UP/DOWN:
 
 - **Now Playing** — Current track, seek bar, volume, balance, transport controls
 
-![Now Playing](screenshots/now_playing.png)
+![Classic Theme](screenshots/now_playing.png)
+![Synthwave Theme](screenshots/synthwave_player.png)
+![Matrix Theme](screenshots/matrix_player.png)
 
 - **Start Menu** — Launch screen with quick access to all features
 
@@ -190,12 +192,18 @@ pageramp/                    # Payload: /root/payloads/user/utilities/pageramp/
 ├── lib/                     # pagerctl library (libpagerctl.so + pagerctl.py)
 ├── config/                  # ALSA and D-Bus configuration
 ├── skins/                   # Theme folders
-│   └── classic/             # Winamp Classic theme
-│       ├── classic.json     # Theme config (colors, fonts, layout, sprites)
-│       ├── classic_bg.png   # 480x222 background image
-│       ├── play-active.png  # Transport button sprites
-│       ├── slider-knob.png  # Seek/volume knob sprites
-│       └── ...              # All other theme assets
+│   ├── classic/             # Winamp Classic theme
+│   │   ├── classic.json     # Theme config (colors, fonts, layout, sprites)
+│   │   ├── classic_bg.png   # 480x222 background image
+│   │   └── ...              # Button, knob, and toggle sprites
+│   ├── synthwave/           # Synthwave neon theme
+│   │   ├── synthwave.json
+│   │   ├── synthwave_bg.png
+│   │   └── ...
+│   └── matrix/              # Matrix green-on-black theme
+│       ├── matrix.json
+│       ├── matrix_bg.png
+│       └── ...
 ├── fonts/                   # DejaVuSansMono.ttf
 ├── firmware/rtl_bt/         # RTL8761B Bluetooth firmware
 ├── data/                    # Runtime data (settings.json, created at runtime)
