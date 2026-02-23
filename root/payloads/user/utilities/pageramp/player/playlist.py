@@ -5,7 +5,7 @@ Playlist management — M3U parsing, directory scanning, shuffle, repeat.
 import os
 import random
 
-MUSIC_DIR = "/mmc/music"
+MUSIC_DIR = "/mmc/root/payloads/user/utilities/pageramp/music"
 SUPPORTED_EXT = (".mp3", ".wav")
 
 

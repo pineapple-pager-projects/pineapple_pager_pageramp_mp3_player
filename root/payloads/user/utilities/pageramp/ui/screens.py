@@ -789,9 +789,9 @@ class PlaylistScreen:
 
 
 class FileBrowserScreen:
-    """File browser for /mmc/music/."""
+    """File browser for music directory."""
 
-    def __init__(self, client, playlist, root_dir="/mmc/music"):
+    def __init__(self, client, playlist, root_dir="/mmc/root/payloads/user/utilities/pageramp/music"):
         self.client = client
         self.playlist = playlist
         self.root_dir = root_dir

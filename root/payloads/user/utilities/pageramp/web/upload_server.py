@@ -2,7 +2,7 @@
 """
 PagerAmp Web Upload Server — HTTP file upload service for music files.
 
-Runs on port 1337. Accepts .mp3, .wav, .m3u uploads to /mmc/music/.
+Runs on port 1337. Accepts .mp3, .wav, .m3u uploads to the payload music directory.
 Mobile-friendly drag-and-drop interface.
 
 Usage: python3 upload_server.py [--port PORT] [--dir MUSIC_DIR]
@@ -15,13 +15,14 @@ import cgi
 import argparse
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-MUSIC_DIR = "/mmc/music"
+MUSIC_DIR = "/mmc/root/payloads/user/utilities/pageramp/music"
 ALLOWED_EXT = {".mp3", ".wav", ".m3u"}
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 
 # Log files available for download
 LOG_FILES = {
     "pageramp_bt.log": "/tmp/pageramp_bt.log",
+    "pageramp_crash.log": "/tmp/pageramp_crash.log",
 }
 
 # HTML template path

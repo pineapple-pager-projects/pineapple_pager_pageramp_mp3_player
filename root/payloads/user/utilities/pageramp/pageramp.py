@@ -30,7 +30,7 @@ from ui.bluetooth import BluetoothScreen
 # Settings file
 DATA_DIR = os.path.join(SCRIPT_DIR, "data")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
-MUSIC_DIR = "/mmc/music"
+MUSIC_DIR = "/mmc/root/payloads/user/utilities/pageramp/music"
 
 # Target frame rate — low to save CPU for BT audio on MIPS
 TARGET_FPS = 5

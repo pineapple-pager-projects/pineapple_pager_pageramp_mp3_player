@@ -308,17 +308,18 @@ fi
 # ===================================================
 # 8. Prepare music directory
 # ===================================================
-mkdir -p /mmc/music
+MMC_MUSIC="/mmc/root/payloads/user/utilities/pageramp/music"
+mkdir -p "$MMC_MUSIC"
 
 # Copy bundled demo track if music directory is empty
-if [ -z "$(ls /mmc/music/*.mp3 2>/dev/null)" ]; then
-    cp "$PAYLOAD_DIR/music/"*.mp3 /mmc/music/ 2>/dev/null
+if [ -z "$(ls "$MMC_MUSIC"/*.mp3 2>/dev/null)" ]; then
+    cp "$PAYLOAD_DIR/music/"*.mp3 "$MMC_MUSIC/" 2>/dev/null
 fi
 
 # ===================================================
 # 9. Start web upload server
 # ===================================================
-python3 "$PAYLOAD_DIR/web/upload_server.py" --port 1337 --dir /mmc/music &
+python3 "$PAYLOAD_DIR/web/upload_server.py" --port 1337 --dir "$MMC_MUSIC" &
 WEB_PID=$!
 
 # ===================================================
@@ -326,9 +327,11 @@ WEB_PID=$!
 # ===================================================
 mkdir -p "$DATA_DIR"
 
+CRASH_LOG="/tmp/pageramp_crash.log"
+
 while true; do
     cd "$PAYLOAD_DIR"
-    python3 pageramp.py
+    python3 pageramp.py 2>"$CRASH_LOG"
     EXIT_CODE=$?
 
     # Exit code 42 = hand off to another payload
@@ -339,6 +342,25 @@ while true; do
             bash "$NEXT_SCRIPT"
             [ $? -eq 42 ] && continue
         fi
+    fi
+
+    # If pageramp crashed, show the error
+    if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 42 ]; then
+        LOG ""
+        LOG "red" "=== PagerAmp crashed (exit code $EXIT_CODE) ==="
+        LOG ""
+        if [ -s "$CRASH_LOG" ]; then
+            # Show last 15 lines of error
+            tail -15 "$CRASH_LOG" | while IFS= read -r line; do
+                LOG "red" "  $line"
+            done
+        fi
+        LOG ""
+        LOG "Log saved to: $CRASH_LOG"
+        LOG "Download via web portal or check /tmp/pageramp_crash.log"
+        LOG ""
+        LOG "Press any button to exit..."
+        WAIT_FOR_INPUT >/dev/null 2>&1
     fi
 
     break
