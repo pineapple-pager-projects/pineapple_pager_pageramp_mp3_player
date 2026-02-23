@@ -2,16 +2,19 @@
 
 A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://shop.hak5.org/products/wifi-pineapple-pager) by Hak5.
 
-![PagerAmp UI](https://raw.githubusercontent.com/brainphreak/pineapple_pager_pageramp_mp3_player/main/skins/classic_bg.png)
+![PagerAmp Now Playing](screenshots/now_playing.png)
 
 ## Features
 
-- MP3 playback via Bluetooth A2DP (speaker/headphones)
+- MP3/WAV playback via Bluetooth A2DP (speaker/headphones)
 - Skinnable Winamp-style UI with 3 built-in skins (Classic, Modern, Retro)
 - Web upload interface at `http://172.16.52.1:1337` for adding music from your phone/laptop
+- Debug log download from the web interface for troubleshooting
 - Playlist management with shuffle and repeat modes
 - Bluetooth device pairing and management from the on-screen menu
-- Auto-reconnect to previously paired Bluetooth speakers
+- Auto-reconnect to previously paired Bluetooth devices
+- Auto-dim screen after 2 minutes of inactivity
+- Adjustable screen brightness from settings
 - Low CPU usage (~5%) using mpg123 as the audio backend
 
 ## Requirements
@@ -22,38 +25,87 @@ A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://
 
 ## Installation
 
-1. Copy this entire repo to the Pager:
+1. SSH into the Pager and create the payload directory:
 
 ```bash
-scp -r . root@172.16.52.1:/root/payloads/user/utilities/pageramp/
+ssh root@172.16.52.1
+mkdir -p /root/payloads/user/utilities/pageramp
 ```
 
-2. On the Pager, the payload will appear in the utilities menu. On first launch, it will prompt to install dependencies (python3 and mpg123) — press GREEN to install.
+2. Copy the payload files to the Pager:
 
-3. Plug in a USB Bluetooth adapter and pair your speaker from the Bluetooth menu.
+```bash
+scp -r root/payloads/user/utilities/pageramp/* root@172.16.52.1:/root/payloads/user/utilities/pageramp/
+```
+
+3. On the Pager, the payload will appear in the utilities menu. On first launch, it will prompt to install dependencies (python3 and mpg123) — press GREEN to install.
+
+![Payload Splash](screenshots/payload.png)
+
+4. Plug in a USB Bluetooth adapter and pair your speaker from the Bluetooth menu.
 
 ## Usage
 
 ### Controls
 
+**Now Playing Screen:**
+
+The Now Playing screen has four focus areas you navigate between with UP/DOWN:
+
+| Focus Area | LEFT / RIGHT | GREEN | RED |
+|------------|-------------|-------|-----|
+| Transport | Select button (prev/play/pause/stop/next) | Execute action | Open menu |
+| Seek | Seek backward/forward 10s | — | Back to transport |
+| Volume | Decrease/increase volume | — | Back to transport |
+| Balance | Pan left/right | — | Back to transport |
+
+**Menu / List Screens:**
+
 | Button | Action |
 |--------|--------|
-| GREEN | Start / Confirm / Play-Pause |
-| RED | Back / Exit |
-| UP / DOWN | Navigate menus / Adjust volume |
-| LEFT / RIGHT | Seek backward/forward (on now playing screen) |
+| UP / DOWN | Navigate items |
+| GREEN | Select / confirm |
+| RED | Back |
 
 ### Screens
 
-- **Now Playing** — Shows current track, seek bar, volume, transport controls
-- **Playlist** — Browse and select tracks from the current playlist
-- **File Browser** — Browse `/mmc/music/` and load songs
+- **Now Playing** — Current track, seek bar, volume, balance, transport controls
+
+![Now Playing](screenshots/now_playing.png)
+
+- **Start Menu** — Launch screen with quick access to all features
+
+![Start Menu](screenshots/start_menu.png)
+
+- **File Browser** — Browse music directory and load songs
+
+![File Browser](screenshots/browse_files.png)
+
 - **Bluetooth** — Scan, pair, and connect Bluetooth audio devices
-- **Skin Select** — Switch between Classic, Modern, and Retro skins
 
-### Web Upload
+![Bluetooth Scanning](screenshots/bluetooth.png)
+![Bluetooth Devices](screenshots/bluetooth_devices.png)
 
-With PagerAmp running, navigate to `http://172.16.52.1:1337` from any device on the Pager's network to upload MP3 files. Uploaded files appear in the file browser immediately.
+- **Settings** — Skin selection, brightness, shuffle, repeat
+
+![Settings](screenshots/settings.png)
+
+- **Menu Overlay** — Quick access menu over the now playing screen
+
+![Menu](screenshots/menu.png)
+
+### Adding Music
+
+**Via Web Upload:** With PagerAmp running, go to `http://172.16.52.1:1337` from any device on the Pager's network. Drag and drop MP3/WAV files to upload. You can also download debug logs from this page.
+
+![Web Upload Interface](screenshots/webui.jpg)
+
+**Via SCP:** Copy files directly to the music directory:
+```bash
+scp your_song.mp3 root@172.16.52.1:/mmc/root/payloads/user/utilities/pageramp/music/
+```
+
+New files appear when you open the File Browser screen.
 
 ## Known Issues
 
@@ -66,7 +118,7 @@ The built-in MediaTek MT7961 Bluetooth on the Pineapple Pager has a firmware bug
 - **CSR8510** — Works out of the box
 - **RTL8761B** — Firmware files are bundled in `firmware/rtl_bt/`
 
-Plug in the adapter before launching PagerAmp. The payload automatically detects the external adapter and skips the built-in MT7961.
+Plug in the adapter before launching PagerAmp. The payload automatically detects the external adapter and skips the built-in MT7961. On launch, PagerAmp bootstraps the full Bluetooth stack (dbus, bluetoothd, bluealsad) and auto-connects to the last paired device.
 
 ## Architecture
 
@@ -83,7 +135,7 @@ PagerAmp uses **mpg123** in remote mode (`--remote`) as the audio backend, sendi
 ## Project Structure
 
 ```
-pageramp/                    # Clone/copy to /root/payloads/user/utilities/pageramp/
+pageramp/                    # Payload: /root/payloads/user/utilities/pageramp/
 ├── payload.sh               # Entry point (bash launcher)
 ├── pageramp.py              # Main Python application
 ├── player/
@@ -108,9 +160,10 @@ pageramp/                    # Clone/copy to /root/payloads/user/utilities/pager
 ├── fonts/                   # DejaVuSansMono.ttf
 ├── firmware/rtl_bt/         # RTL8761B Bluetooth firmware
 ├── data/                    # Runtime data (settings.json, created at runtime)
-├── music/                   # Default demo tracks + user uploads
-└── src/                     # Development tools (not needed on the Pager)
+└── music/                   # Bundled demo tracks
 ```
+
+Music files are stored at `/mmc/root/payloads/user/utilities/pageramp/music/` on the Pager's persistent MMC storage.
 
 ## Author
 

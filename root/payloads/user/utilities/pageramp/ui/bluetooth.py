@@ -252,8 +252,14 @@ class BluetoothScreen:
                     # Strip LE- prefix
                     if name.startswith("LE-"):
                         name = name[3:]
-                    # Skip unnamed/random-MAC entries
-                    if mac not in seen and name and ":" not in name:
+                    # Skip unnamed, MAC-like, or too-short names
+                    # MAC pattern: XX:XX:XX:XX:XX:XX or XX-XX-XX-XX-XX-XX
+                    is_mac = (len(name) == 17 and
+                              (name.count(":") == 5 or name.count("-") == 5) and
+                              all(c in "0123456789ABCDEFabcdef:-"
+                                  for c in name))
+                    if (mac not in seen and name and
+                            not is_mac and len(name) >= 3):
                         self.devices.append((mac, name))
                         seen.add(mac)
 
@@ -551,7 +557,7 @@ class BluetoothScreen:
                 pager.fill_rect(0, y, SCREEN_W, self.line_height - 1,
                                c("track_highlight"))
 
-            tc = c("track_highlight_text") if is_sel else c("track_text")
+            tc = c("title_bar_text") if is_sel else c("progress_knob")
             display = "%s  %s" % (name, mac)
             # Truncate
             max_w = SCREEN_W - 16
@@ -565,20 +571,20 @@ class BluetoothScreen:
         c = skin.color
         y = 50
         for line in self.error_msg.split("\n"):
-            pager.draw_ttf(20, y, line, c("warning"), FONT_PATH, 14)
+            pager.draw_ttf(20, y, line, c("title_bar_text"), FONT_PATH, 14)
             y += 20
 
     def _draw_done(self, pager, skin):
         c = skin.color
-        pager.draw_ttf(20, 60, self.message, c("accent"), FONT_PATH, 16)
+        pager.draw_ttf(20, 60, self.message, c("title_bar_text"), FONT_PATH, 16)
 
         mac = self.settings.get("bt_device_mac", "")
         if mac:
-            pager.draw_ttf(20, 90, mac, c("text_dim"), FONT_PATH, 12)
+            pager.draw_ttf(20, 90, mac, c("title_bar_text"), FONT_PATH, 12)
 
     def _draw_status(self, pager, skin):
         c = skin.color
-        pager.draw_ttf(20, 60, self.message, c("text"), FONT_PATH, 14)
+        pager.draw_ttf(20, 60, self.message, c("title_bar_text"), FONT_PATH, 14)
 
         # Scanning animation
         if self.state == self.SCAN:
@@ -604,4 +610,4 @@ class BluetoothScreen:
         else:
             hints = "[B] Back"
 
-        pager.draw_ttf(8, y, hints, c("text_dim"), FONT_PATH, 10)
+        pager.draw_ttf(8, y, hints, c("progress_knob"), FONT_PATH, 10)

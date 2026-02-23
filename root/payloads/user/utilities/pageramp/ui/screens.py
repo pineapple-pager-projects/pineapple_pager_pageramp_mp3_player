@@ -84,7 +84,7 @@ class StartScreen:
             pager.hline(0, 22, SCREEN_W, c("separator"))
             # Beveled edges
             pager.hline(0, 0, SCREEN_W, c("separator"))
-            pager.draw_ttf_centered(32, "PagerAmp", c("accent"),
+            pager.draw_ttf_centered(32, "PagerAmp", c("title_bar_text"),
                                     FONT_PATH, 24)
             sub_y = 60
 
@@ -104,14 +104,11 @@ class StartScreen:
             pager.hline((SCREEN_W - line_w) // 2, 48, line_w, c("accent"))
             sub_y = 54
 
-        pager.draw_ttf_centered(sub_y, "Winamp for Pager", c("text_dim"),
-                                FONT_PATH, 11)
-
         # BT status
         bt_name = self.settings.get("bt_device_name", "")
         if bt_name:
-            pager.draw_ttf_centered(sub_y + 16, "BT: " + bt_name,
-                                    c("info"), FONT_PATH, 10)
+            pager.draw_ttf_centered(sub_y + 4, "BT: " + bt_name,
+                                    c("info"), FONT_PATH, 11)
 
         # Menu items
         y = 88
@@ -133,7 +130,7 @@ class StartScreen:
                 pager.fill_rect(hx, y, tw + 16, self.line_height - 2,
                                c("track_highlight"))
 
-            tc = c("menu_selected") if is_sel else c("menu_text")
+            tc = c("title_bar_text") if is_sel else c("progress_knob")
             pager.draw_ttf_centered(y + 4, display, tc,
                                     FONT_PATH, self.font_size)
 
@@ -141,7 +138,7 @@ class StartScreen:
 
         # Bottom hints
         pager.draw_ttf(8, SCREEN_H - 14, "[A] Select  [B] Exit",
-                      c("text_dim"), FONT_PATH, 10)
+                      c("title_bar_text"), FONT_PATH, 10)
 
 
 class NowPlayingScreen:
@@ -783,8 +780,8 @@ class PlaylistScreen:
                       c("title_bar_text"), FONT_PATH, skin.font("title"))
 
         # Track list
-        self.track_list.draw(pager, c("track_text"), c("track_highlight"),
-                            c("track_highlight_text"), c("track_number"),
+        self.track_list.draw(pager, c("progress_knob"), c("track_highlight"),
+                            c("title_bar_text"), c("track_number"),
                             c("accent"))
 
 
@@ -940,7 +937,7 @@ class FileBrowserScreen:
                 pager.fill_rect(0, ty, SCREEN_W, self.line_height - 1,
                                c("track_highlight"))
 
-            tc = c("track_highlight_text") if is_sel else c("track_text")
+            tc = c("title_bar_text") if is_sel else c("progress_knob")
             if is_dir:
                 icon = "[D] " if name != ".." else " <- "
             else:
@@ -1065,7 +1062,7 @@ class SettingsScreen:
                 pager.fill_rect(0, y, SCREEN_W, self.line_height - 1,
                                c("track_highlight"))
 
-            tc = c("track_highlight_text") if is_sel else c("menu_text")
+            tc = c("title_bar_text") if is_sel else c("progress_knob")
 
             pager.draw_ttf(8, y + 3, label, tc, FONT_PATH, self.font_size)
 
@@ -1076,7 +1073,7 @@ class SettingsScreen:
                 val = value_fn
             if val:
                 vw = pager.ttf_width(val, FONT_PATH, self.font_size)
-                vc = c("accent") if is_sel else c("text_dim")
+                vc = c("accent") if is_sel else c("progress_knob")
                 pager.draw_ttf(SCREEN_W - vw - 12, y + 3, val, vc,
                               FONT_PATH, self.font_size)
 
@@ -1146,7 +1143,7 @@ class MenuOverlay:
             if is_sel:
                 pager.fill_rect(mx + 1, y, menu_w - 2,
                                self.line_height - 2, c("track_highlight"))
-            tc = c("menu_selected") if is_sel else c("menu_text")
+            tc = c("title_bar_text") if is_sel else c("progress_knob")
             pager.draw_ttf(mx + 16, y + 4, item, tc,
                           FONT_PATH, self.font_size)
             y += self.line_height
