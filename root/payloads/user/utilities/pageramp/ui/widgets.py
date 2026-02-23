@@ -58,31 +58,73 @@ class ScrollText:
             self.offset = 0
             self.pause_frames = self.PAUSE_AT_START
 
+    def _fit_text(self, pager, text, max_px):
+        """Truncate text to fit within max_px pixels."""
+        if pager.ttf_width(text, FONT_PATH, self.font_size) <= max_px:
+            return text
+        # Binary search for the longest substring that fits
+        lo, hi = 0, len(text)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if pager.ttf_width(text[:mid], FONT_PATH, self.font_size) <= max_px:
+                lo = mid
+            else:
+                hi = mid - 1
+        return text[:lo]
+
+    def _draw_clipped(self, pager, text, tx, color):
+        """Draw text at tx, clipped to [self.x, self.x + max_width]."""
+        right_edge = self.x + self.max_width
+        # Off-screen entirely
+        if tx >= right_edge or tx + self.text_width <= self.x:
+            return
+        # Left clipping: skip leading characters that are off-screen
+        draw_text = text
+        draw_x = tx
+        if tx < self.x:
+            # Find how many pixels are off the left edge
+            skip_px = self.x - tx
+            # Find how many characters to skip
+            lo, hi = 0, len(text)
+            while lo < hi:
+                mid = (lo + hi + 1) // 2
+                if pager.ttf_width(text[:mid], FONT_PATH,
+                                   self.font_size) <= skip_px:
+                    lo = mid
+                else:
+                    hi = mid - 1
+            draw_text = text[lo:]
+            draw_x = self.x
+        # Right clipping: truncate to fit within remaining width
+        avail = right_edge - draw_x
+        draw_text = self._fit_text(pager, draw_text, avail)
+        if draw_text:
+            pager.draw_ttf(draw_x, self.y, draw_text, color,
+                          FONT_PATH, self.font_size)
+
     def draw(self, pager, color):
-        """Draw the text, scrolling if needed."""
+        """Draw the text, clipped to the title area."""
         if not self.text:
             return
 
         if not self._needs_scroll:
-            pager.draw_ttf(self.x, self.y, self.text, color,
+            # Static text — truncate to fit
+            clipped = self._fit_text(pager, self.text, self.max_width)
+            pager.draw_ttf(self.x, self.y, clipped, color,
                           FONT_PATH, self.font_size)
             return
 
-        # Draw scrolling text with clip simulation via two copies
+        # Scrolling text with proper clipping
         gap = 60
         total = self.text_width + gap
 
         # First copy
         tx = self.x - self.offset
-        if tx + self.text_width > self.x:
-            pager.draw_ttf(max(tx, self.x), self.y, self.text, color,
-                          FONT_PATH, self.font_size)
+        self._draw_clipped(pager, self.text, tx, color)
 
         # Second copy (wrapping)
         tx2 = tx + total
-        if tx2 < self.x + self.max_width:
-            pager.draw_ttf(max(tx2, self.x), self.y, self.text, color,
-                          FONT_PATH, self.font_size)
+        self._draw_clipped(pager, self.text, tx2, color)
 
 
 class ProgressBar:
