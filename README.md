@@ -132,6 +132,39 @@ PagerAmp uses **mpg123** in remote mode (`--remote`) as the audio backend, sendi
                    status
 ```
 
+## Creating Themes
+
+Themes are self-contained folders under `skins/`. To create a new theme:
+
+1. Copy the `skins/classic/` folder:
+```bash
+cp -r skins/classic skins/mytheme
+```
+
+2. Edit the JSON config (`mytheme/*.json`):
+
+| Section | What it controls |
+|---------|-----------------|
+| `name` | Theme name shown in the Settings menu |
+| `background` | Background image filename (480x222 PNG) |
+| `colors` | All UI colors as hex values (`#RRGGBB`) |
+| `fonts` | Font sizes for each UI element |
+| `layout` | X/Y positions and dimensions of all widgets |
+| `sprites` | Filenames and positions of button/knob/toggle images |
+
+3. Replace the image assets:
+
+| Asset | Description |
+|-------|-------------|
+| `*_bg.png` | Full 480x222 background image |
+| `previous-active.png`, `play-active.png`, `pause-active.png`, `stop-active.png`, `next-active.png`, `eject-active.png` | Transport button highlight sprites |
+| `slider-knob.png`, `slider-knob-active.png` | Seek bar knob (normal and focused) |
+| `vol-knob.png`, `vol-knob-active.png` | Volume/balance knob (normal and focused) |
+| `shuffle-active.png`, `shuffle-toggled.png`, `shuffle-active-toggled.png` | Shuffle button states |
+| `repeat-active.png`, `repeat-toggled.png`, `repeat-active-toggled.png` | Repeat button states |
+
+The theme will automatically appear in the Theme selector. The screen resolution is **480x222** (landscape).
+
 ## Project Structure
 
 ```
@@ -145,7 +178,7 @@ pageramp/                    # Payload: /root/payloads/user/utilities/pageramp/
 │   ├── screens.py           # UI screens (now playing, playlist, file browser, etc.)
 │   ├── widgets.py           # UI widgets (buttons, sliders, lists)
 │   ├── bluetooth.py         # Bluetooth pairing/connection screen
-│   └── skin.py              # Skin loader
+│   └── skin.py              # Skin/theme loader
 ├── web/
 │   ├── upload_server.py     # HTTP upload server (port 1337)
 │   └── templates/           # HTML templates
@@ -156,8 +189,13 @@ pageramp/                    # Payload: /root/payloads/user/utilities/pageramp/
 ├── bt/lib/                  # BlueALSA + ALSA shared libraries
 ├── lib/                     # pagerctl library (libpagerctl.so + pagerctl.py)
 ├── config/                  # ALSA and D-Bus configuration
-├── skins/                   # Theme folders (each contains JSON config + all assets)
-│   └── classic/             # Winamp Classic theme (bg, buttons, knobs, colors, layout)
+├── skins/                   # Theme folders
+│   └── classic/             # Winamp Classic theme
+│       ├── classic.json     # Theme config (colors, fonts, layout, sprites)
+│       ├── classic_bg.png   # 480x222 background image
+│       ├── play-active.png  # Transport button sprites
+│       ├── slider-knob.png  # Seek/volume knob sprites
+│       └── ...              # All other theme assets
 ├── fonts/                   # DejaVuSansMono.ttf
 ├── firmware/rtl_bt/         # RTL8761B Bluetooth firmware
 ├── data/                    # Runtime data (settings.json, created at runtime)
