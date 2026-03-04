@@ -2,6 +2,9 @@
 
 A Winamp-inspired Bluetooth music player for the [WiFi Pineapple Pager](https://shop.hak5.org/products/wifi-pineapple-pager) by Hak5.
 
+Tested/Written using this cheap bluetooth dongle (under $10)
+https://amzn.to/3PdqeRM
+
 ![PagerAmp Now Playing](screenshots/now_playing.png)
 
 ## Features
