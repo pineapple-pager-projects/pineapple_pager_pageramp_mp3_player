@@ -211,6 +211,10 @@ class BluetoothScreen:
         self.devices = []
         self._scan_start = time.time()
 
+        # Select correct adapter before scanning
+        if self.adapter_mac:
+            self._run("bluetoothctl select %s" % self.adapter_mac)
+
         # bluetoothctl scan on — registers devices with bluetoothd
         subprocess.Popen(
             "timeout %d bluetoothctl scan on >/dev/null 2>&1"
