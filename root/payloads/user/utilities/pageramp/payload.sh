@@ -179,7 +179,7 @@ cleanup() {
         /etc/init.d/pineapplepager start 2>/dev/null
     fi
 }
-trap cleanup EXIT
+trap cleanup EXIT TERM INT HUP
 
 # ===================================================
 # 6. Splash screen and start confirmation
@@ -300,8 +300,19 @@ except: pass
 " 2>/dev/null)
 
     if [ -n "$SAVED_MAC" ]; then
+        # Ensure device is registered as BR/EDR on the correct adapter
+        # (clears stale LE-only entries that can't carry audio)
+        INFO=$(bluetoothctl info "$SAVED_MAC" 2>/dev/null)
+        if echo "$INFO" | grep -q "AddressType: le"; then
+            bluetoothctl remove "$SAVED_MAC" 2>/dev/null
+            sleep 1
+        fi
+        hcitool -i "$HCI" cc "$SAVED_MAC" 2>/dev/null
+        sleep 1
+        bluetoothctl select "$ADAPTER_MAC" 2>/dev/null
+        bluetoothctl trust "$SAVED_MAC" 2>/dev/null
         bluetoothctl connect "$SAVED_MAC" 2>/dev/null &
-        sleep 3
+        sleep 5
     fi
 fi
 

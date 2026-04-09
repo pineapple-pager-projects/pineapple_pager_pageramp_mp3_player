@@ -12,6 +12,7 @@ import json
 import time
 import signal
 import subprocess
+import threading
 
 # Add lib directory to path for pagerctl
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -134,6 +135,72 @@ class PagerAmp:
         # Layout now_playing for initial skin
         self.screens["now_playing"].layout(self.skin_manager.current)
 
+    def init_bluetooth(self):
+        """Bootstrap Bluetooth stack and auto-reconnect to saved device.
+
+        This mirrors what payload.sh does but runs inside Python so it
+        works regardless of how PagerAmp is launched (payload.sh or
+        bootloader).
+        """
+        bt = self.screens.get("bluetooth")
+        if not bt:
+            return
+
+        # Detect adapter and start BT stack (dbus, bluetoothd, bluealsad)
+        bt._check_adapter(start_scan=False)
+        if not bt.hci:
+            return
+
+        # Auto-reconnect to saved device
+        mac = self.settings.get("bt_device_mac")
+        if not mac:
+            return
+
+        # Check if device exists and whether it's LE-only
+        info = bt._run("bluetoothctl info %s 2>&1" % mac, timeout=5)
+        is_le = "LE-" in info or "AddressType: le" in info
+
+        # Remove stale LE-only entries that can't carry audio
+        if is_le and "not available" not in info:
+            bt._log("removing stale LE entry for %s" % mac)
+            bt._run("bluetoothctl remove %s 2>&1" % mac, timeout=5)
+            time.sleep(1)
+
+        # Check if device exists and is already paired
+        info = bt._run("bluetoothctl info %s 2>&1" % mac, timeout=5)
+        bt._log("auto-reconnect info: %s" % info[:200])
+
+        if "not available" in info:
+            # Device not known — create classic connection to register it
+            bt._ensure_classic_connection(mac)
+            time.sleep(2)
+            info = bt._run("bluetoothctl info %s 2>&1" % mac, timeout=5)
+            if "not available" in info:
+                bt._log("device not available after cc — skipping")
+                return
+
+        # Verify bluealsad is running (needed for A2DP)
+        bt._ensure_bluealsad()
+        bluealsad_pid = bt._run("pidof bluealsad")
+        bt._log("bluealsad pid: %s" % bluealsad_pid)
+
+        # Try to connect with retries
+        for attempt in range(3):
+            bt._log("auto-reconnect attempt %d" % (attempt + 1))
+            connect_result = bt._run(
+                "bluetoothctl connect %s 2>&1" % mac, timeout=15)
+            bt._log("connect result: %s" % connect_result[:200])
+            time.sleep(3)
+            check = bt._run("bluetoothctl info %s 2>&1" % mac, timeout=5)
+            if "Connected: yes" in check:
+                self._bt_connected = True
+                self.settings["bt_connected"] = True
+                bt._log("auto-reconnect SUCCESS")
+                return
+            time.sleep(2)
+
+        bt._log("auto-reconnect failed after 3 attempts")
+
     def init_audio(self):
         """Start mpg123 and set initial volume."""
         self.client.start()
@@ -242,6 +309,7 @@ class PagerAmp:
             self.client.set_volume(self.settings.get("volume", 80))
 
         self._bt_connected = connected
+        self.settings["bt_connected"] = connected
 
     def update(self):
         """Update state — poll mpg123 status, auto-advance, auto-dim."""
@@ -298,6 +366,9 @@ class PagerAmp:
         self.init_screens()
         self.init_audio()
 
+        # Bootstrap BT in background so UI is responsive immediately
+        threading.Thread(target=self.init_bluetooth, daemon=True).start()
+
         while self.running:
             frame_start = time.time()
 
@@ -316,16 +387,20 @@ class PagerAmp:
 
     def shutdown(self):
         """Clean shutdown."""
-        # Save settings
+        # Save settings (exclude runtime-only keys)
         self.settings["volume"] = self.client._volume
         self.settings["theme"] = self.skin_manager.current_name
         self.settings["shuffle"] = self.playlist.shuffle
         self.settings["repeat"] = self.playlist.repeat
+        self.settings.pop("bt_connected", None)
         save_settings(self.settings)
 
         # Stop audio
         self.client.quit()
         self.client.cleanup()
+
+        # Stop bluealsad (we always start this ourselves)
+        subprocess.run("killall -q bluealsad 2>/dev/null", shell=True)
 
         # Cleanup display
         if self.pager:

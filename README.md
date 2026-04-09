@@ -41,7 +41,13 @@ mkdir -p /root/payloads/user/utilities/pageramp
 scp -r root/payloads/user/utilities/pageramp/* root@172.16.52.1:/root/payloads/user/utilities/pageramp/
 ```
 
-3. On the Pager, the payload will appear in the utilities menu. On first launch, it will prompt to install dependencies (python3 and mpg123) — press GREEN to install.
+3. **Windows / ZIP download users only:** If you downloaded the ZIP from GitHub or copied files from Windows, the executable bits will be missing. SSH into the Pager and run:
+
+```bash
+chmod +x /root/payloads/user/utilities/pageramp/payload.sh /root/payloads/user/utilities/pageramp/pageramp.py /root/payloads/user/utilities/pageramp/bin/*
+```
+
+4. On the Pager, the payload will appear in the utilities menu. On first launch, it will prompt to install dependencies (python3 and mpg123) — press GREEN to install.
 
 ![Payload Splash](screenshots/payload.png)
 

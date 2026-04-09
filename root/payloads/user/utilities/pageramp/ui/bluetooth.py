@@ -79,24 +79,25 @@ class BluetoothScreen:
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return ""
 
-
-    def _check_adapter(self):
+    def _check_adapter(self, start_scan=True):
         """Find USB Bluetooth adapter and bootstrap the entire BT stack.
 
         On a factory-reset Pager nothing is running, so the order matters:
         1. Find adapter via hciconfig (no dbus/bluetoothd needed)
-        2. Start dbus-daemon + install D-Bus policy
-        3. Start bluetoothd
-        4. Configure adapter via bluetoothctl (needs bluetoothd)
-        5. Start bluealsad (needs dbus + bluetoothd)
+        2. Bring down MediaTek so bluetoothd only manages the CSR
+        3. Start dbus-daemon + install D-Bus policy
+        4. Start bluetoothd
+        5. Configure adapter via bluetoothctl (needs bluetoothd)
+        6. Start bluealsad (needs dbus + bluetoothd)
         """
         self.message = "Looking for USB BT dongle..."
+        mt_hci = None
         for hci in ("hci0", "hci1"):
             info = self._run("hciconfig -a %s 2>/dev/null" % hci)
             if "Bus: USB" not in info:
                 continue
-            # Skip MT7961 — broken ACL data path
             if "MediaTek" in info:
+                mt_hci = hci
                 continue
             if info:
                 self.hci = hci
@@ -109,31 +110,34 @@ class BluetoothScreen:
                             self.adapter_mac = parts[idx + 1]
                         break
 
-                # 1. Bring adapter up (HCI level, no dbus needed)
+                # 1. Bring down MediaTek so bluetoothd defaults to CSR
+                if mt_hci:
+                    self._run("hciconfig %s down" % mt_hci)
+
+                # 2. Bring CSR adapter up
                 self._run("hciconfig %s up" % hci)
                 self._run("hciconfig %s auth encrypt" % hci)
                 self._run('hciconfig %s name "Pineapple Pager"' % hci)
 
-                # 2. dbus-daemon + policy
+                # 3. dbus-daemon + policy
                 self.message = "Starting Bluetooth services..."
                 self._ensure_dbus()
 
-                # 3. bluetoothd
+                # 4. bluetoothd
                 self._ensure_bluetoothd()
 
-                # 4. Configure via bluetoothctl (needs bluetoothd running)
-                if self.adapter_mac:
-                    self._run("bluetoothctl select %s" % self.adapter_mac)
-                self._run("bluetoothctl power on")
-                self._run("bluetoothctl pairable on")
-                self._run('bluetoothctl system-alias "Pineapple Pager"')
+                # 5. Configure via bluetoothctl (no select needed — CSR is the only adapter)
+                self._run("bluetoothctl power on", timeout=5)
+                self._run("bluetoothctl pairable on", timeout=5)
+                self._run('bluetoothctl system-alias "Pineapple Pager"', timeout=5)
 
-                # 5. bluealsad
+                # 6. bluealsad
                 self._ensure_bluealsad()
 
                 self.message = "Found: %s (%s)" % (hci, self.adapter_mac or "?")
-                self.state = self.SCAN
-                self._start_scan()
+                if start_scan:
+                    self.state = self.SCAN
+                    self._start_scan()
                 return
 
         self.state = self.ERROR
@@ -167,8 +171,11 @@ class BluetoothScreen:
     def _ensure_bluetoothd(self):
         """Ensure bluetoothd is running."""
         if not self._run("pidof bluetoothd"):
-            self._run("bluetoothd -n &", timeout=3)
-            time.sleep(2)
+            subprocess.Popen(
+                ["bluetoothd", "-n"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            time.sleep(3)
 
     def _ensure_bluealsad(self):
         """Ensure bluealsad is running on the correct adapter."""
@@ -203,22 +210,26 @@ class BluetoothScreen:
     def _start_scan(self):
         """Begin scanning for Bluetooth devices.
 
-        Uses bluetoothctl scan on which discovers both BLE and BR/EDR
-        devices AND registers them with bluetoothd (required for
-        bluetoothctl pair/connect to work).
+        Runs both BLE (bluetoothctl scan) and classic BR/EDR (hcitool scan)
+        in parallel. Some audio devices only appear in classic inquiry
+        while others advertise via BLE.
         """
         self.message = "Scanning... Put device in pairing mode!"
         self.devices = []
         self._scan_start = time.time()
 
-        # Select correct adapter before scanning
-        if self.adapter_mac:
-            self._run("bluetoothctl select %s" % self.adapter_mac)
-
-        # bluetoothctl scan on — registers devices with bluetoothd
+        # BLE scan — discovers BLE devices and registers with bluetoothd
         subprocess.Popen(
             "timeout %d bluetoothctl scan on >/dev/null 2>&1"
             % self._scan_duration,
+            shell=True,
+        )
+
+        # Classic BR/EDR scan in parallel on the correct adapter
+        hci = self.hci or "hci0"
+        subprocess.Popen(
+            "timeout %d hcitool -i %s scan 2>/dev/null > /tmp/.pageramp_classic_scan"
+            % (self._scan_duration, hci),
             shell=True,
         )
 
@@ -245,7 +256,7 @@ class BluetoothScreen:
                         self.devices.append((mac, name + " [paired]"))
                         seen.add(mac)
 
-        # 2. All discovered devices from bluetoothctl
+        # 2. All discovered devices from bluetoothctl (BLE scan results)
         all_devs = self._run("bluetoothctl devices 2>/dev/null")
         for line in all_devs.split("\n"):
             if line.startswith("Device "):
@@ -267,11 +278,22 @@ class BluetoothScreen:
                         self.devices.append((mac, name))
                         seen.add(mac)
 
-        # Saved device as fallback
-        saved = self.settings.get("bt_device_mac")
-        if saved and saved not in seen:
-            saved_name = self.settings.get("bt_device_name", "Saved Device")
-            self.devices.insert(0, (saved, saved_name + " [saved]"))
+        # 3. Classic BR/EDR scan results (catches devices BLE misses)
+        try:
+            with open("/tmp/.pageramp_classic_scan", "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("Scanning"):
+                        continue
+                    parts = line.split("\t")
+                    if len(parts) >= 2:
+                        mac = parts[0].strip()
+                        name = parts[1].strip()
+                        if mac not in seen and name and len(name) >= 3:
+                            self.devices.append((mac, name))
+                            seen.add(mac)
+        except (IOError, OSError):
+            pass
 
         if self.devices:
             self.state = self.SELECT_DEVICE
@@ -300,9 +322,9 @@ class BluetoothScreen:
                       % (mac, asound_path))
 
     def _do_pair(self, mac):
-        """Pair with bluetoothctl. Returns True on success."""
+        """Pair with bluetoothctl on the correct adapter. Returns True on success."""
         self._log("bluetoothctl pair: %s" % mac)
-        result = self._run("bluetoothctl pair %s 2>&1" % mac, timeout=20)
+        result = self._run("bluetoothctl pair %s" % mac, timeout=20)
         self._log("pair result: [%s]" % result[:300])
 
         if "Pairing successful" in result:
@@ -314,12 +336,14 @@ class BluetoothScreen:
 
         # Check bluetoothd state as fallback
         time.sleep(2)
-        info = self._run("bluetoothctl info %s 2>/dev/null" % mac, timeout=5)
+        info = self._run("bluetoothctl info %s" % mac, timeout=5)
         return "Paired: yes" in info
 
     def _try_connect(self, mac):
-        """Attempt bluetoothctl connect. Returns (connected, auth_fail)."""
-        result = self._run("bluetoothctl connect %s 2>&1" % mac, timeout=15)
+        """Attempt bluetoothctl connect on the correct adapter.
+        Returns (connected, auth_fail).
+        """
+        result = self._run("bluetoothctl connect %s" % mac, timeout=15)
         self._log("connect result: [%s]" % result[:300])
         time.sleep(3)
 
@@ -339,6 +363,18 @@ class BluetoothScreen:
         self._run("bluetoothctl remove %s" % mac, timeout=5)
         time.sleep(1)
 
+    def _ensure_classic_connection(self, mac):
+        """Create a classic BR/EDR ACL connection to register the device
+        with bluetoothd on the correct adapter. This is needed because
+        bluetoothctl scan may only find the device via BLE, but A2DP
+        audio requires a classic connection.
+        """
+        hci = self.hci or "hci0"
+        self._log("hcitool cc -i %s %s" % (hci, mac))
+        result = self._run("hcitool -i %s cc %s" % (hci, mac), timeout=10)
+        self._log("cc result: [%s]" % result[:200])
+        time.sleep(1)
+
     def _pair_device(self, mac, name):
         """Connect to a Bluetooth device with robust error recovery.
 
@@ -353,21 +389,28 @@ class BluetoothScreen:
         """
         self._log("=== START pair_device mac=%s name=%s ===" % (mac, name))
 
-        if self.adapter_mac:
-            self._run("bluetoothctl select %s" % self.adapter_mac)
+        # Ensure device is registered as BR/EDR on the correct adapter
+        self._ensure_classic_connection(mac)
 
         # Prepare audio path early (asound.conf + bluealsad)
         self._update_asound(mac)
         self._ensure_bluealsad()
 
         # Check current device state in bluetoothd
-        info = self._run("bluetoothctl info %s 2>/dev/null" % mac, timeout=5)
+        # (wait briefly for hcitool cc ACL to settle — it creates a
+        # transient connection that bluetoothd may report as Connected
+        # even though no A2DP profile is established yet)
+        time.sleep(2)
+        info = self._run("bluetoothctl info %s" % mac, timeout=5)
         already_paired = "Paired: yes" in info
-        already_connected = "Connected: yes" in info
+        # Only trust "Connected" if also paired — raw ACL from hcitool cc
+        # shows as connected but has no audio profile
+        already_connected = ("Paired: yes" in info and
+                             "Connected: yes" in info)
         self._log("state: paired=%s connected=%s" % (
             already_paired, already_connected))
 
-        # ── Already connected ─────────────────────────────
+        # ── Already connected (with A2DP profile) ────────
         if already_connected:
             self._log("already connected — done")
             self._finish_connect(mac, name)
@@ -401,16 +444,17 @@ class BluetoothScreen:
                 paired = True
                 break
             self._log("pair attempt %d failed" % (pair_attempt + 1))
-            # Remove and re-discover before retry
+            # Remove, re-establish classic connection, and retry
             self._remove_device(mac)
-            self._run("timeout 5 bluetoothctl scan on >/dev/null 2>&1",
-                       timeout=8)
+            self._ensure_classic_connection(mac)
             time.sleep(1)
 
         if not paired:
             self.state = self.ERROR
             self.error_msg = ("Pairing failed.\nPut device in pairing\n"
-                              "mode and try again.")
+                              "mode and try again.\n\n"
+                              "Check /tmp/pageramp_bt.log\n"
+                              "for details.")
             self._log("PAIR FAILED after retries")
             return
 
@@ -435,6 +479,7 @@ class BluetoothScreen:
                 # if device stored a different key). Remove and re-pair.
                 self._log("auth fail after fresh pair — re-pair")
                 self._remove_device(mac)
+                self._ensure_classic_connection(mac)
                 if self._do_pair(mac):
                     self._run("bluetoothctl trust %s" % mac, timeout=5)
                     time.sleep(0.5)
@@ -444,7 +489,9 @@ class BluetoothScreen:
 
         self.state = self.ERROR
         self.error_msg = ("Connection failed.\nPut device in pairing\n"
-                          "mode and try again.")
+                          "mode and try again.\n\n"
+                          "Check /tmp/pageramp_bt.log\n"
+                          "for details.")
         self._log("FINAL: connection failed after all attempts")
 
     def _finish_connect(self, mac, name):

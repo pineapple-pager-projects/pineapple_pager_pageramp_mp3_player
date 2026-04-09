@@ -104,11 +104,12 @@ class StartScreen:
             pager.hline((SCREEN_W - line_w) // 2, 48, line_w, c("accent"))
             sub_y = 54
 
-        # BT status
-        bt_name = self.settings.get("bt_device_name", "")
-        if bt_name:
-            pager.draw_ttf_centered(sub_y + 4, "BT: " + bt_name,
-                                    c("info"), FONT_PATH, 11)
+        # BT status — only show if connected
+        if self.settings.get("bt_connected"):
+            bt_name = self.settings.get("bt_device_name", "")
+            if bt_name:
+                pager.draw_ttf_centered(sub_y + 4, "BT: " + bt_name,
+                                        c("info"), FONT_PATH, 11)
 
         # Menu items
         y = 88
