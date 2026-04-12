@@ -163,10 +163,12 @@ cleanup() {
         hciconfig "$h" down 2>/dev/null
     done
 
-    # Now kill BT daemons
-    killall -q bluealsad bluetoothd 2>/dev/null
+    # Kill bluealsad but leave bluetoothd alive — restarting it is slow
+    # and loses adapter state, and the bootloader path leaves it running
+    # too, so this keeps both launch paths consistent.
+    killall -q bluealsad 2>/dev/null
     sleep 1
-    killall -q -9 pageramp.py mpg123 bluealsad bluetoothd 2>/dev/null
+    killall -q -9 pageramp.py mpg123 bluealsad 2>/dev/null
     [ -n "$WEB_PID" ] && kill -9 "$WEB_PID" 2>/dev/null
 
     # Remove D-Bus config if we installed it

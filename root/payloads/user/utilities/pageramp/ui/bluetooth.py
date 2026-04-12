@@ -57,7 +57,10 @@ class BluetoothScreen:
         self.line_height = 18
         self.visible_count = (SCREEN_H - 60) // self.line_height
         self._scan_start = 0
-        self._scan_duration = 12
+        self._scan_duration = 11
+        self._scan_seen = set()
+        self._scan_active = False
+        self._last_scan_refresh = 0
         self._pair_pending = None  # (mac, name) when pairing requested
         self._pair_draw_wait = 0  # frames to wait before starting pair
         self.return_screen = "settings"
@@ -79,11 +82,29 @@ class BluetoothScreen:
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return ""
 
+    def _is_mediatek(self, hci):
+        """Identify the MediaTek MT7961 by USB vendor ID via sysfs.
+
+        Why: hciconfig's "Manufacturer:" line is only populated when the
+        adapter is UP, so a string-based check sees DOWN MediaTek as a
+        generic adapter and selects it as the target — which silently
+        binds bluealsad to the wrong hci every other run.
+        """
+        try:
+            with open("/sys/class/bluetooth/%s/device/uevent" % hci) as f:
+                for line in f:
+                    if line.startswith("PRODUCT="):
+                        vendor = line.split("=", 1)[1].split("/")[0].lower()
+                        return vendor == "e8d"
+        except (IOError, OSError):
+            pass
+        return False
+
     def _check_adapter(self, start_scan=True):
         """Find USB Bluetooth adapter and bootstrap the entire BT stack.
 
         On a factory-reset Pager nothing is running, so the order matters:
-        1. Find adapter via hciconfig (no dbus/bluetoothd needed)
+        1. Classify adapters by USB ID (state-independent)
         2. Bring down MediaTek so bluetoothd only manages the CSR
         3. Start dbus-daemon + install D-Bus policy
         4. Start bluetoothd
@@ -91,57 +112,64 @@ class BluetoothScreen:
         6. Start bluealsad (needs dbus + bluetoothd)
         """
         self.message = "Looking for USB BT dongle..."
+
         mt_hci = None
+        target_hci = None
         for hci in ("hci0", "hci1"):
-            info = self._run("hciconfig -a %s 2>/dev/null" % hci)
+            info = self._run("hciconfig %s 2>/dev/null" % hci)
             if "Bus: USB" not in info:
                 continue
-            if "MediaTek" in info:
+            if self._is_mediatek(hci):
                 mt_hci = hci
-                continue
-            if info:
-                self.hci = hci
-                self.hci_index = hci.replace("hci", "")
-                for line in info.split("\n"):
-                    if "BD Address" in line:
-                        parts = line.split()
-                        idx = parts.index("Address:") if "Address:" in parts else -1
-                        if idx >= 0 and idx + 1 < len(parts):
-                            self.adapter_mac = parts[idx + 1]
-                        break
+            else:
+                target_hci = hci
 
-                # 1. Bring down MediaTek so bluetoothd defaults to CSR
-                if mt_hci:
-                    self._run("hciconfig %s down" % mt_hci)
+        if not target_hci:
+            self.state = self.ERROR
+            self.error_msg = ("No USB BT dongle found.\n"
+                              "Plug in a dongle and try again.")
+            return
 
-                # 2. Bring CSR adapter up
-                self._run("hciconfig %s up" % hci)
-                self._run("hciconfig %s auth encrypt" % hci)
-                self._run('hciconfig %s name "Pineapple Pager"' % hci)
+        self.hci = target_hci
+        self.hci_index = target_hci.replace("hci", "")
 
-                # 3. dbus-daemon + policy
-                self.message = "Starting Bluetooth services..."
-                self._ensure_dbus()
+        # 1. Bring down MediaTek so bluetoothd defaults to CSR
+        if mt_hci:
+            self._run("hciconfig %s down" % mt_hci)
 
-                # 4. bluetoothd
-                self._ensure_bluetoothd()
+        # 2. Bring CSR adapter up and configure
+        self._run("hciconfig %s up" % target_hci)
+        self._run("hciconfig %s auth encrypt" % target_hci)
+        self._run('hciconfig %s name "Pineapple Pager"' % target_hci)
 
-                # 5. Configure via bluetoothctl (no select needed — CSR is the only adapter)
-                self._run("bluetoothctl power on", timeout=5)
-                self._run("bluetoothctl pairable on", timeout=5)
-                self._run('bluetoothctl system-alias "Pineapple Pager"', timeout=5)
+        info = self._run("hciconfig -a %s 2>/dev/null" % target_hci)
+        for line in info.split("\n"):
+            if "BD Address" in line:
+                parts = line.split()
+                idx = parts.index("Address:") if "Address:" in parts else -1
+                if idx >= 0 and idx + 1 < len(parts):
+                    self.adapter_mac = parts[idx + 1]
+                break
 
-                # 6. bluealsad
-                self._ensure_bluealsad()
+        # 3. dbus-daemon + policy
+        self.message = "Starting Bluetooth services..."
+        self._ensure_dbus()
 
-                self.message = "Found: %s (%s)" % (hci, self.adapter_mac or "?")
-                if start_scan:
-                    self.state = self.SCAN
-                    self._start_scan()
-                return
+        # 4. bluetoothd
+        self._ensure_bluetoothd()
 
-        self.state = self.ERROR
-        self.error_msg = "No USB BT dongle found.\nPlug in a dongle and try again."
+        # 5. Configure via bluetoothctl (CSR is the only adapter now)
+        self._run("bluetoothctl power on", timeout=5)
+        self._run("bluetoothctl pairable on", timeout=5)
+        self._run('bluetoothctl system-alias "Pineapple Pager"', timeout=5)
+
+        # 6. bluealsad
+        self._ensure_bluealsad()
+
+        self.message = "Found: %s (%s)" % (target_hci, self.adapter_mac or "?")
+        if start_scan:
+            self.state = self.SCAN
+            self._start_scan()
 
     def _ensure_dbus(self):
         """Ensure dbus-daemon is running and BlueALSA policy is installed."""
@@ -216,7 +244,20 @@ class BluetoothScreen:
         """
         self.message = "Scanning... Put device in pairing mode!"
         self.devices = []
+        self._scan_seen = set()
         self._scan_start = time.time()
+        self._last_scan_refresh = 0
+        self._scan_active = True
+
+        # Truncate previous classic-scan results so stale entries don't
+        # show up before the new scan has written anything
+        try:
+            open("/tmp/.pageramp_classic_scan", "w").close()
+        except (IOError, OSError):
+            pass
+
+        # Show paired devices immediately so user can pick one without waiting
+        self._collect_devices()
 
         # BLE scan — discovers BLE devices and registers with bluetoothd
         subprocess.Popen(
@@ -233,17 +274,12 @@ class BluetoothScreen:
             shell=True,
         )
 
-    def _poll_scan(self):
-        """Check scan results when scan timer expires."""
-        elapsed = time.time() - self._scan_start
-        if elapsed < self._scan_duration:
-            self.message = "Scanning... %ds remaining" % int(
-                self._scan_duration - elapsed)
-            return
+    def _collect_devices(self):
+        """Append newly-discovered devices to self.devices.
 
-        self.devices = []
-        seen = set()
-
+        Called repeatedly during scanning. Uses self._scan_seen to dedupe
+        across calls so the list grows incrementally.
+        """
         # 1. Paired devices first
         paired = self._run("bluetoothctl devices Paired 2>/dev/null")
         for line in paired.split("\n"):
@@ -252,9 +288,9 @@ class BluetoothScreen:
                 if len(parts) >= 3:
                     mac = parts[1]
                     name = parts[2]
-                    if mac not in seen:
+                    if mac not in self._scan_seen:
                         self.devices.append((mac, name + " [paired]"))
-                        seen.add(mac)
+                        self._scan_seen.add(mac)
 
         # 2. All discovered devices from bluetoothctl (BLE scan results)
         all_devs = self._run("bluetoothctl devices 2>/dev/null")
@@ -267,16 +303,17 @@ class BluetoothScreen:
                     # Strip LE- prefix
                     if name.startswith("LE-"):
                         name = name[3:]
-                    # Skip unnamed, MAC-like, or too-short names
-                    # MAC pattern: XX:XX:XX:XX:XX:XX or XX-XX-XX-XX-XX-XX
+                    # Skip unnamed, MAC-like, or too-short names.
+                    # Devices with unresolved names will be retried on
+                    # the next refresh tick when bluetoothd resolves them.
                     is_mac = (len(name) == 17 and
                               (name.count(":") == 5 or name.count("-") == 5) and
                               all(c in "0123456789ABCDEFabcdef:-"
                                   for c in name))
-                    if (mac not in seen and name and
+                    if (mac not in self._scan_seen and name and
                             not is_mac and len(name) >= 3):
                         self.devices.append((mac, name))
-                        seen.add(mac)
+                        self._scan_seen.add(mac)
 
         # 3. Classic BR/EDR scan results (catches devices BLE misses)
         try:
@@ -289,16 +326,44 @@ class BluetoothScreen:
                     if len(parts) >= 2:
                         mac = parts[0].strip()
                         name = parts[1].strip()
-                        if mac not in seen and name and len(name) >= 3:
+                        if (mac not in self._scan_seen and name
+                                and len(name) >= 3):
                             self.devices.append((mac, name))
-                            seen.add(mac)
+                            self._scan_seen.add(mac)
         except (IOError, OSError):
             pass
 
+    def _poll_scan(self):
+        """Refresh device list during scanning; transition when found."""
+        now = time.time()
+        elapsed = now - self._scan_start
+
+        # Refresh roughly once per second so new devices appear live
+        if now - self._last_scan_refresh >= 1.0:
+            self._last_scan_refresh = now
+            self._collect_devices()
+            # As soon as we have something, jump to selection — the
+            # scan keeps running in the background so more devices
+            # may still appear in the list.
+            if self.devices and self.state == self.SCAN:
+                self.state = self.SELECT_DEVICE
+                self.selected = 0
+
+        if elapsed < self._scan_duration:
+            if self.state == self.SCAN:
+                self.message = "Scanning... %ds remaining" % int(
+                    self._scan_duration - elapsed)
+            return
+
+        # Scan timer expired — final pass and stop refreshing
+        self._scan_active = False
+        self._collect_devices()
+
         if self.devices:
-            self.state = self.SELECT_DEVICE
+            if self.state == self.SCAN:
+                self.state = self.SELECT_DEVICE
+                self.selected = 0
             self.message = "Found %d device(s)" % len(self.devices)
-            self.selected = 0
         else:
             self.message = "No devices found. Scan again?"
 
@@ -568,7 +633,8 @@ class BluetoothScreen:
             self._pair_pending = None
             self._pair_draw_wait = 0
             self._pair_device(mac, name)
-        elif self.state == self.SCAN:
+        elif self.state == self.SCAN or (
+                self.state == self.SELECT_DEVICE and self._scan_active):
             self._poll_scan()
 
     def draw(self, pager, skin):
@@ -578,6 +644,8 @@ class BluetoothScreen:
         # Header
         pager.fill_rect(0, 0, SCREEN_W, 22, c("title_bar_bg"))
         state_label = self.STATE_LABELS[self.state]
+        if self.state == self.SELECT_DEVICE and self._scan_active:
+            state_label += " (scanning)"
         pager.draw_ttf(6, 2, "Bluetooth: " + state_label,
                       c("title_bar_text"), FONT_PATH, skin.font("title"))
 
